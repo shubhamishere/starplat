@@ -20,4 +20,4 @@ int main() {
     std::cout << "Number of triangles in the graph: " << num_triangles << std::endl;
     std::cout<<"Time taken : "<<endtime-starttime<<std::endl;
     return 0;
-}i
+}
