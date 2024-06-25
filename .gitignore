@@ -2,6 +2,8 @@ lex.yy.c
 src/parser/y.tab.h
 src/parser/y.tab.c
 .vscode/
+graphcode/generated_omp/*h
+graphcode/generated_omp/*cc
 src/finalcode
 src/finalcode.exe
 src/bin/*.o
