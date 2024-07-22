@@ -599,6 +599,7 @@ int main(int argc,char **argv)
      
 
 
+   create_directory(backendTarget);
    yyin= fopen(fileName,"r");
    
    if(!yyin) {
