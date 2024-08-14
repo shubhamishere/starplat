@@ -122,6 +122,8 @@ void dsl_cpp_generator::generation_begin() {
   header.pushString("#include ");
   addIncludeToFile("stdlib.h", header, true);
   header.pushString("#include ");
+  addIncludeToFile("ParallelHeapCudaClass.cu", header, false);
+  header.pushString("#include ");
   addIncludeToFile("limits.h", header, true);
   header.pushString("#include ");
   addIncludeToFile("cuda.h", header, true);
@@ -1100,6 +1102,13 @@ void dsl_cpp_generator::generateProcCall(proc_callStmt* proc_callStmt,
       }
     }
   }
+  else {
+      cout << "hello"<<isMainFile<<endl;
+      generate_exprProcCall(procedure,isMainFile);
+      main.pushstr_newL(";");
+      main.NewLine();
+    }
+
   /*
    if(x==0)
        {
@@ -1538,6 +1547,31 @@ void dsl_cpp_generator::generateParamList(list<formalParam*> paramList, dslCodeP
     }
     // if(argumentTotal==0)
   }
+}
+
+void dsl_cpp_generator::generateNestedContainer(Type* type,bool isMainFile){
+
+    main.pushstr_space(convertToCppType(type));
+    main.pushString("(");
+
+    if(type->getArgList().size() !=0){
+
+      list<argument*> args = type->getArgList();
+      Expression* expr = args.front()->getExpr();
+      generateExpr(expr,isMainFile);
+
+      if(type->getInnerTargetSize() != NULL){
+        main.pushstr_space(",");
+        generateNestedContainer(type->getInnerTargetSize(),isMainFile);
+      }
+      else if(type->getArgList().size() == 2) {
+        main.pushstr_space(",");
+        generateExpr(args.back()->getExpr(),isMainFile);
+      }   
+
+    }
+
+    main.pushString(")");
 }
 
 void dsl_cpp_generator ::addCudaKernel(forallStmt* forAll) {
@@ -2060,6 +2094,13 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
     }
   }
 
+  else if(type->isHeapType())
+   { 
+     main.pushstr_space(convertToCppType(type));
+     main.pushString(declStmt->getdeclId()->getIdentifier());
+     main.pushstr_newL(";");
+   }
+
   //needs to handle carefully for PR code generation
   else if (type->isPrimitiveType()) {
     char strBuffer[1024];
@@ -2150,6 +2191,32 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
       targetFile.pushstr_newL(";");
     }
   }
+
+  else if(type->gettypeId() == TYPE_CONTAINER){
+             
+	  main.pushstr_space(convertToCppType(type));
+	  main.pushString(declStmt->getdeclId()->getIdentifier());
+
+	  if(type->getArgList().size() !=0){
+		 
+		 list<argument*> args = type->getArgList();
+		 Expression* expr = args.front()->getExpr();
+		 main.pushString("(");
+		 generateExpr(expr,isMainFile);
+
+	  if(type->getInnerTargetSize() != NULL)
+		 generateNestedContainer(type->getInnerTargetSize(),isMainFile);
+	  else if(type->getArgList().size() == 2) {
+		 main.pushstr_space(",");
+		 generateExpr(args.back()->getExpr(),isMainFile);
+	   }   
+
+		 main.pushString(")");
+
+	  }
+
+	  main.pushstr_newL(";");
+}
 }
 
 void dsl_cpp_generator::generate_exprLiteral(Expression* expr,
@@ -2368,6 +2435,50 @@ void dsl_cpp_generator::generate_exprUnary(Expression* expr, bool isMainFile) {
   }
 }
 
+void dsl_cpp_generator::generateArgList(list<argument*> argList, bool addBraces, bool isMainFile)
+ {
+
+  char strBuffer[1024]; 
+
+  if(addBraces)
+     main.pushString("(") ;
+
+  int argListSize = argList.size();
+  int commaCounts = 0;
+  list<argument*>::iterator itr;
+  for(itr=argList.begin();itr!=argList.end();itr++)
+  {
+    commaCounts++;
+    argument* arg = *itr;
+    Expression* expr = arg->getExpr();//->getId();
+    //sprintf(strBuffer, "%s", id->getIdentifier());
+   // main.pushString(strBuffer);
+    generateExpr(expr,isMainFile);
+    if(commaCounts < argListSize)
+       main.pushString(",");
+
+  }
+  
+  if(addBraces)
+    main.pushString(")");
+
+ }
+
+string dsl_cpp_generator::getProcName(proc_callExpr* proc){
+
+string methodId(proc->getMethodId()->getIdentifier());
+
+if(methodId == "push") {
+
+    string modifiedId = "push_back";
+    return modifiedId;
+
+   }
+else
+   return methodId;
+
+}
+
 void dsl_cpp_generator::generate_exprProcCall(Expression* expr,
                                               bool isMainFile) {
   //~ cout << "inside the expr_proCall ggggggggggggggggggggggggg" << isMainFile;
@@ -2403,12 +2514,34 @@ void dsl_cpp_generator::generate_exprProcCall(Expression* expr,
   } else {
     char strBuffer[1024];
     list<argument*> argList = proc->getArgList();
-    if (argList.size() == 0) {
+    Identifier* objectId = proc->getId1();
+    if(objectId!=NULL) 
+    {
+      cout << "isnide here 1"<<endl;
+        Identifier* id2 = proc->getId2();
+        if(id2 != NULL)
+          {
+
+            sprintf(strBuffer,"%s.%s.%s",objectId->getIdentifier(), id2->getIdentifier(), getProcName(proc));
+          }
+        else
+        {
+            sprintf(strBuffer,"%s.%s",objectId->getIdentifier(), getProcName(proc).c_str());  
+      
+        }
+        targetFile.pushString(strBuffer);
+    }
+    else if (argList.size() == 0) {
+      cout << "isnide here 2"<<endl;
       Identifier* objectId = proc->getId1();
       sprintf(strBuffer, "%s.%s( )", objectId->getIdentifier(),
               proc->getMethodId()->getIdentifier());
       targetFile.pushString(strBuffer);
     }
+
+    cout << "isnide here 3"<<endl;
+    generateArgList(argList, true, isMainFile); 
+    
   }
 }
 
@@ -2979,7 +3112,10 @@ void dsl_cpp_generator::generateFunc(ASTNode* proc) {
 }
 
 const char* dsl_cpp_generator::convertToCppType(Type* type) {
-  if (type->isPrimitiveType()) {
+  if(type->isHeapType()){
+  	return "Heap";
+  }
+  else if (type->isPrimitiveType()) {
     int typeId = type->gettypeId();
     switch (typeId) {
       case TYPE_INT:
@@ -3030,6 +3166,22 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
     switch (typeId) {
       case TYPE_SETN:
         return "std::set<int>&";
+
+      case TYPE_CONTAINER:
+      {
+		char* newS = new char[1024];
+		string vecString = "thrust::host_vector<";   
+
+		char* valType = (char*)convertToCppType(type->getInnerTargetType());
+		string innerString = valType;
+		vecString = vecString + innerString;
+		vecString = vecString + ">";
+
+		copy(vecString.begin(), vecString.end(), newS);
+		newS[vecString.size()] = '\0';
+		return newS; 
+
+      }
 
       default:
         assert(false);
