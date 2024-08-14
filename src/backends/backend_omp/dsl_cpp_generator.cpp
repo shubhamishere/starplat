@@ -38,6 +38,8 @@ void dsl_cpp_generator::generation_begin() {
   header.pushString("#include");
   addIncludeToFile("atomic", header, true);
   header.pushString("#include");
+  addIncludeToFile("ParallelHeapOpenMPClass.cpp", header, false);
+  header.pushString("#include");
   addIncludeToFile("omp.h", header, true);
   header.pushString("#include");
   addIncludeToFile("../graph.hpp", header, false);
@@ -697,6 +699,7 @@ void dsl_cpp_generator::generateProcCall(proc_callStmt* proc_callStmt) {  // cou
         main.pushstr_newL("}");
     }
        else {
+        cout << "hello"<<endl;
               generate_exprProcCall(procedure);
               main.pushstr_newL(";");
               main.NewLine();
@@ -1593,6 +1596,12 @@ void dsl_cpp_generator:: generateVariableDecl(declaration* declStmt)
                                     to be freed to manage memory.*/
              freeIdStore.back().push_back(declStmt->getdeclId());
              
+   }
+   else if(type->isHeapType())
+   { 
+     main.pushstr_space(convertToCppType(type));
+     main.pushString(declStmt->getdeclId()->getIdentifier());
+     main.pushstr_newL(";");
    }
    else if(type->isPrimitiveType())
    { 
@@ -2622,7 +2631,10 @@ void dsl_cpp_generator::generateFunc(ASTNode* proc)
 
 const char* dsl_cpp_generator:: convertToCppType(Type* type)
 {
-  if(type->isPrimitiveType())
+  if(type->isHeapType()){
+  	return "Heap";
+  }
+  else if(type->isPrimitiveType())
   {
       int typeId=type->gettypeId();
       switch(typeId)
