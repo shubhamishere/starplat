@@ -72,12 +72,12 @@
 %token <cval> CHAR_VAL
 %token return_func
 
-%type <node> function_def function_data  return_func function_body param
+%type <node> function_def function_data function_body param
 %type <pList> paramList
 %type <node> statement blockstatements assignment declaration proc_call control_flow reduction return_stmt batch_blockstmt on_add_blockstmt on_delete_blockstmt
 %type <node> type type1 type2 type3
-%type <node> primitive graph collections heap property container nodemap
-%type <node> primitive graph collections property container nodemap vector hashmap hashset
+
+%type <node> primitive graph collections property container nodemap vector hashmap hashset heap
 %type <node> id leftSide rhs expression oid val boolean_expr unary_expr indexExpr tid  
 %type <node> bfs_abstraction filterExpr reverse_abstraction
 %type <nodeList> leftList rightList
