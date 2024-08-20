@@ -65,7 +65,7 @@ void dsl_cpp_generator::generateLaunchConfig(const char* name) {
   const char* totalThreads = (strcmp(name, "nodes") == 0) ? "V" : "E";
   sprintf(strBuffer, "const unsigned threadsPerBlock = %u;", threadsPerBlock);
   main.pushstr_newL(strBuffer);
-  sprintf(strBuffer, "unsigned numThreads   = (%s > threadsPerBlock)? %u: %s;", totalThreads, threadsPerBlock, totalThreads);
+  sprintf(strBuffer, "unsigned numThreads   = (%s < threadsPerBlock)? %u: %s;", totalThreads, threadsPerBlock, totalThreads);
   main.pushstr_newL(strBuffer);
   sprintf(strBuffer,
           "unsigned numBlocks    = "
@@ -123,6 +123,8 @@ void dsl_cpp_generator::generation_begin() {
   addIncludeToFile("stdlib.h", header, true);
   header.pushString("#include ");
   addIncludeToFile("ParallelHeapCudaClass.cu", header, false);
+  header.pushString("#include ");
+  addIncludeToFile("deepak_map_cuda.cu", header, false);
   header.pushString("#include ");
   addIncludeToFile("limits.h", header, true);
   header.pushString("#include ");
@@ -1102,13 +1104,13 @@ void dsl_cpp_generator::generateProcCall(proc_callStmt* proc_callStmt,
       }
     }
   }
-  else {
+   else {
       cout << "hello"<<isMainFile<<endl;
       generate_exprProcCall(procedure,isMainFile);
       main.pushstr_newL(";");
       main.NewLine();
     }
-
+  
   /*
    if(x==0)
        {
@@ -2100,7 +2102,12 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
      main.pushString(declStmt->getdeclId()->getIdentifier());
      main.pushstr_newL(";");
    }
-
+   else if(type->isMapType())
+   { 
+     main.pushstr_space(convertToCppType(type));
+     main.pushString(declStmt->getdeclId()->getIdentifier());
+     main.pushstr_newL(";");
+   }
   //needs to handle carefully for PR code generation
   else if (type->isPrimitiveType()) {
     char strBuffer[1024];
@@ -2191,7 +2198,7 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
       targetFile.pushstr_newL(";");
     }
   }
-
+  
   else if(type->gettypeId() == TYPE_CONTAINER){
              
 	  main.pushstr_space(convertToCppType(type));
@@ -2220,7 +2227,8 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
 }
 
 void dsl_cpp_generator::generate_exprLiteral(Expression* expr,
-                                             bool isMainFile) {
+                                             bool isMainFile) 
+{
   dslCodePad& targetFile = isMainFile ? main : header;
 
   char valBuffer[1024];
@@ -2351,6 +2359,7 @@ void dsl_cpp_generator::generate_exprRelational(Expression* expr,
     targetFile.pushString(")");
   }
 }
+
 
 void dsl_cpp_generator::generate_exprIdentifier(Identifier* id,
                                                 bool isMainFile) {
@@ -3115,6 +3124,9 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
   if(type->isHeapType()){
   	return "Heap";
   }
+  else if(type->isMapType()){
+  	return "Map";
+  }
   else if (type->isPrimitiveType()) {
     int typeId = type->gettypeId();
     switch (typeId) {
@@ -3167,7 +3179,7 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
       case TYPE_SETN:
         return "std::set<int>&";
 
-      case TYPE_CONTAINER:
+	  case TYPE_CONTAINER:
       {
 		char* newS = new char[1024];
 		string vecString = "thrust::host_vector<";   
@@ -3181,8 +3193,7 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
 		newS[vecString.size()] = '\0';
 		return newS; 
 
-      }
-
+      } 
       default:
         assert(false);
     }
