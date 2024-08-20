@@ -115,6 +115,7 @@ NEGATE [-]
 
 /* Data Structure Types */
 "Heap" 	{printf("Heap Type"); return T_HEAP;}
+"Map" 	{printf("Map Type"); return T_MAP;}
 
 
  /* Graph Types */
