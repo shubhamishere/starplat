@@ -128,7 +128,7 @@ template <typename T>
 	    propList.get_lock (owner_proc, SHARED_LOCK, no_checks_needed) ;
 	    T* data = propList.get_data(owner_proc, local_node_id, 1, SHARED_LOCK);
       propList.unlock(owner_proc, SHARED_LOCK); // doing an unlock later experiment.
-			int val = data[0] ;
+			T val = data[0] ;
 			delete[] data ;
 			data =NULL ;
       return val ;
