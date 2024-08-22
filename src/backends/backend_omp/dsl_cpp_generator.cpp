@@ -40,6 +40,8 @@ void dsl_cpp_generator::generation_begin() {
   header.pushString("#include");
   addIncludeToFile("ParallelHeapOpenMPClass.cpp", header, false);
   header.pushString("#include");
+  addIncludeToFile("deepak_map_openMP.cpp", header, false);
+  header.pushString("#include");
   addIncludeToFile("omp.h", header, true);
   header.pushString("#include");
   addIncludeToFile("../graph.hpp", header, false);
@@ -699,7 +701,7 @@ void dsl_cpp_generator::generateProcCall(proc_callStmt* proc_callStmt) {  // cou
         main.pushstr_newL("}");
     }
        else {
-        cout << "hello"<<endl;
+              cout << "hello"<<endl;
               generate_exprProcCall(procedure);
               main.pushstr_newL(";");
               main.NewLine();
@@ -1603,6 +1605,12 @@ void dsl_cpp_generator:: generateVariableDecl(declaration* declStmt)
      main.pushString(declStmt->getdeclId()->getIdentifier());
      main.pushstr_newL(";");
    }
+   else if(type->isMapType())
+   { 
+     main.pushstr_space(convertToCppType(type));
+     main.pushString(declStmt->getdeclId()->getIdentifier());
+     main.pushstr_newL(";");
+   }
    else if(type->isPrimitiveType())
    { 
      main.pushstr_space(convertToCppType(type));
@@ -2266,6 +2274,7 @@ void dsl_cpp_generator::generate_exprProcCall(Expression* expr)
 
         if(objectId!=NULL) 
           {
+            cout << "isnide here 1"<<endl;
              Identifier* id2 = proc->getId2();
              if(id2 != NULL)
                {
@@ -2280,6 +2289,7 @@ void dsl_cpp_generator::generate_exprProcCall(Expression* expr)
           }
         else if(indexExpr != NULL)
           {
+            cout << "isnide here 2"<<endl;
             cout<<"ENTERED HERE FOR INDEXEXPR GENERATION DYNAMIC"<<"\n";
             Expression* mapExpr = indexExpr->getMapExpr();
             Identifier* mapExprId = mapExpr->getId();
@@ -2292,7 +2302,7 @@ void dsl_cpp_generator::generate_exprProcCall(Expression* expr)
             sprintf(strBuffer,".%s", getProcName(proc).data());
           } 
         else {
-        
+          cout << "isnide here 3"<<endl;
           sprintf(strBuffer,"%s", getProcName(proc).data());
        
         }
@@ -2332,7 +2342,10 @@ void dsl_cpp_generator::generate_exprProcCall(Expression* expr)
                 
       }  
       else  
-        generateArgList(argList, true);    
+      {
+        cout << "isnide here 4"<<endl;
+        generateArgList(argList, true);   
+      } 
 
     }
   
@@ -2633,6 +2646,9 @@ const char* dsl_cpp_generator:: convertToCppType(Type* type)
 {
   if(type->isHeapType()){
   	return "Heap";
+  }
+  else if(type->isMapType()){
+  	return "Map";
   }
   else if(type->isPrimitiveType())
   {

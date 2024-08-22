@@ -27,6 +27,7 @@ enum TYPE
  TYPE_HASHSET,
  TYPE_AUTOREF,
  TYPE_HEAP,
+ TYPE_MAP,
 };
 
 inline bool check_isNodeEdgeType(int typeId)
@@ -48,6 +49,10 @@ inline bool check_isGraphType(int typeId)
 inline bool check_isHeapType(int typeId)
 {
   return typeId==TYPE_HEAP;
+}
+inline bool check_isMapType(int typeId)
+{
+  return typeId==TYPE_MAP;
 }
 inline bool check_isPrimitiveType(int typeId)
   {

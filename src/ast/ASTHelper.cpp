@@ -260,6 +260,11 @@ static ASTNode* createHeapTypeNode(int typeId)
     Type* typeNode=Type::createForHeapType(typeId,1);
     return typeNode;
 }
+static ASTNode* createMapTypeNode(int typeId)
+{
+    Type* typeNode=Type::createForMapType(typeId,1);
+    return typeNode;
+}
 static ASTNode* createCollectionTypeNode(int typeId,ASTNode* targetGraph)
 {
     Type* typeNode=Type::createForCollectionType(typeId,3,(Identifier*)targetGraph);
