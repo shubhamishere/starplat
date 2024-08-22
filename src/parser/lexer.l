@@ -113,10 +113,9 @@ NEGATE [-]
 "Max"     { printf ( "Max");  return T_MAX;}
 "Min"     { printf ( "Min"); return T_MIN;}
 
-
-"Heap" 	{printf("Heap Type"); return T_HEAP;}
-"Map" 	{printf("Map Type"); return T_MAP;}
-
+ /* Data Structures */
+"Heap" 	{printf( "Heap Type" ); return T_HEAP;}
+"Map" 	{printf( "Map Type" ); return T_MAP;}
 
  /* Graph Types */
 "Graph" 	{printf("Graph Type"); return T_GRAPH;}
