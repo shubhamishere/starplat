@@ -72,7 +72,7 @@
 %token <bval> BOOL_VAL
 %token <cval> CHAR_VAL
 
-%type <node> function_def function_data  return_func function_body param
+%type <node> function_def function_data function_body param
 %type <pList> paramList
 %type <node> statement blockstatements assignment declaration proc_call control_flow reduction return_stmt batch_blockstmt on_add_blockstmt on_delete_blockstmt
 %type <node> type type1 type2 type3
