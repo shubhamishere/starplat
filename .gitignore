@@ -28,3 +28,4 @@ graphcode/generated_mpi/*cc
 graphcode/generated_mpi/*h
 .idea/
 *.o
+**/.DS_Store
