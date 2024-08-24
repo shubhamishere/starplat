@@ -3,6 +3,8 @@
 
 #include"../property.h"
 #include"../../rma_datatype/rma_datatype.h"
+#include <set>
+#include <vector>
 
 class Graph;
 
@@ -22,7 +24,10 @@ class NodeProperty : public Property
     std::vector<std::vector<std::pair<int32_t, T>>> reduction_queue;
     std::unordered_map<int, std::vector<std::vector<int> > > sync_later ;
 
-    public :
+    std::vector<std::vector<T>> atomic_add_buffer;
+    std::set<std::pair<int, int>> change_log;
+
+public :
     Rma_Datatype<T> propList;
     void fatBarrier () ;
     void leaveAllSharedLocks () ;
