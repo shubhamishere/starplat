@@ -25,6 +25,7 @@ testcases/testAMD/*
 graphcode/generated_hip/*cc
 graphcode/generated_hip/*h
 graphcode/generated_mpi/output/*
+graphcode/generated_mpi/Makefile
 .idea/
 *.o
 **/.DS_Store
