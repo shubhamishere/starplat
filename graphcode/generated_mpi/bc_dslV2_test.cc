@@ -23,11 +23,11 @@ int main(int argc, char *argv[])
     {
         printf("Time: %f\n", end - start);
         // // print result
-         for (int i = 0; i < graph.num_nodes(); i++)
-         {
-                float v = BC.getValue(i) / 2;
-             printf("Node %d: %.6g\n", i, v);
-         }
+        for (int i = 0; i < graph.num_nodes(); i++)
+        {
+            float v = BC.getValue(i) / 2;
+            printf("Node %d: %.6g\n", i, v);
+        }
     }
 
     return 0;
