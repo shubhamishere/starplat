@@ -30,8 +30,8 @@ private:
     bool write_buffer_ready;
     std::vector<std::vector<T>> atomic_add_buffer;
     std::vector<std::vector<T>> write_buffer;
-    std::set<std::pair<int,int>> atomic_add_change_log;
-    std::set<std::pair<int,int>> write_change_log;
+    std::set<std::pair<int, int>> atomic_add_change_log;
+    std::set<std::pair<int, int>> write_change_log;
 
     // std::unordered_set<std::pair<int,int>, boost::hash<std::pair<int,int>>> atomic_add_change_log;
     // std::unordered_set<std::pair<int,int>, boost::hash<std::pair<int,int>>> write_change_log;

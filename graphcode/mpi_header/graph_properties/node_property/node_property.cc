@@ -5,18 +5,20 @@ template <typename T>
 void NodeProperty<T>::syncAtomicAddsAndWrites()
 {
   propList.get_lock(0, SHARED_ALL_PROCESS_LOCK);
-  for (const auto& [proc, local_node_id] : write_change_log) {
+  for (const auto &[proc, local_node_id] : write_change_log)
+  {
     propList.put_data(proc, &write_buffer[proc][local_node_id], local_node_id, 1, SHARED_LOCK);
     write_buffer[proc][local_node_id] = 0;
   }
   write_change_log.clear();
-  
-  for (const auto& [proc, local_node_id] : atomic_add_change_log) {
+
+  for (const auto &[proc, local_node_id] : atomic_add_change_log)
+  {
     propList.accumulate(proc, &atomic_add_buffer[proc][local_node_id], local_node_id, 1, MPI_SUM, SHARED_LOCK);
     atomic_add_buffer[proc][local_node_id] = 0;
   }
   atomic_add_change_log.clear();
-  
+
   propList.unlock(0, SHARED_ALL_PROCESS_LOCK);
 }
 
@@ -195,11 +197,12 @@ void NodeProperty<T>::setValue(int node_id, T value, bool check_concurrency)
     write_buffer_ready = true;
   }
 
-  if (atomic_add_buffer_ready) {
+  if (atomic_add_buffer_ready)
+  {
     atomic_add_buffer[owner_proc][local_node_id] = 0;
     atomic_add_change_log.erase({owner_proc, local_node_id});
   }
-  
+
   write_buffer[owner_proc][local_node_id] = value;
   write_change_log.insert({owner_proc, local_node_id});
 }
