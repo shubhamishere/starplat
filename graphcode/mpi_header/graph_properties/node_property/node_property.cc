@@ -1,5 +1,7 @@
 #include "node_property.h"
 #include "../../graph_mpi.h"
+#include "node_property.h"
+#include "../../graph_mpi.h"
 
 template <typename T>
 void NodeProperty<T>::syncAtomicAddsAndWrites()
@@ -54,10 +56,6 @@ void NodeProperty<T>::attachToGraph(Graph *graph, T initial_value)
   this->graph = graph;
 
   delete[] data;
-
-  // Only create atomic_add_buffer if the property has atomicAdd calls
-  atomic_add_buffer_ready = false;
-  write_buffer_ready = false;
 }
 
 template <typename T>
@@ -92,10 +90,6 @@ void NodeProperty<T>::attachToGraph(Graph *graph, T *initial_values)
   this->graph = graph;
 
   delete[] data;
-
-  // Only create atomic_add_buffer if the property has atomicAdd calls
-  atomic_add_buffer_ready = false;
-  write_buffer_ready = false;
 }
 
 template <typename T>
