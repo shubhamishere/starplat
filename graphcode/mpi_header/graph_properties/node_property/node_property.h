@@ -11,8 +11,10 @@
 class Graph;
 
 template <typename T>
+template <typename T>
 class NodeProperty : public Property
 {
+private:
 private:
     int length;
 
@@ -50,14 +52,23 @@ public:
         else if (std::is_same_v<T, double>)
             propList.mpi_datatype = MPI_DOUBLE;
         else if (std::is_same_v<T, bool>)
-            propList.mpi_datatype = MPI_CXX_BOOL;
+            else if (std::is_same_v<T, bool>)
+                propList.mpi_datatype = MPI_CXX_BOOL;
         else
-        {
-            std::cerr << "Invalid NodeProperty type";
-            exit(-1);
-        }
+            else
+            {
+                std::cerr << "Invalid NodeProperty type";
+                exit(-1);
+                std::cerr << "Invalid NodeProperty type";
+                exit(-1);
+            }
+        attached_to_graph = false;
         attached_to_graph = false;
     }
+
+    void initialize_reduction_queue() override;
+
+    void add_to_reduction_queue(int reduction_node, std::pair<int32_t, T> pair);
 
     void initialize_reduction_queue() override;
 
@@ -68,18 +79,25 @@ public:
     void assign_reduction_values(std::vector<std::vector<int32_t>> &modified_ids) override;
 
     void attachToGraph(Graph *graph, T initial_value);
+    void attachToGraph(Graph *graph, T initial_value);
+
+    void attachToGraph(Graph *graph, T *initial_values);
 
     void attachToGraph(Graph *graph, T *initial_values);
 
     int32_t getPropertyId() override;
 
     T getValue(int node_id, bool check_concurrency = true);
+    T getValue(int node_id, bool check_concurrency = true);
 
+    void setValue(int node_id, T value, bool check_concurrency = true);
     void setValue(int node_id, T value, bool check_concurrency = true);
 
     void rememberHistory();
 
     T getHistoryValue(int node_id);
+
+    void operator=(const NodeProperty<T> &property);
 
     void operator=(const NodeProperty<T> &property);
 
