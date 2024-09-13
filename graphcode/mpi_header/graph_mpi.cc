@@ -409,25 +409,6 @@ Graph::Graph(char *file, boost::mpi::communicator world, int32_t undirected, boo
     // printf ("speedUpVector size = %d and expected size = %d\n", speedUpForGetEdge.size (), endNode-startNode+1) ;
   }
 }
-speedUpForGetEdge = std::vector<std::unordered_map<int, int>>(endNode - startNode + 1);
-//    printf ("start node = %d and end node = %d\n", startNode, endNode) ;
-if (optimized)
-{
-  for (int u = startNode; u < endNode + 1; u++)
-  {
-    int u_temp = u - startNode;
-    std::unordered_map<int, int> temp3;
-    for (int vIdx = indexofNodes[u_temp]; vIdx < indexofNodes[u_temp + 1]; vIdx++)
-    {
-      int v = destList[vIdx];
-      if (temp3.find(v) == temp3.end())
-        temp3[v] = vIdx;
-    }
-    speedUpForGetEdge[u_temp] = std::move(temp3);
-  }
-  // printf ("speedUpVector size = %d and expected size = %d\n", speedUpForGetEdge.size (), endNode-startNode+1) ;
-}
-}
 
 void Graph::initialise_reduction(MPI_Op op, Property *reduction_property, std::vector<Property *> other_properties)
 {
