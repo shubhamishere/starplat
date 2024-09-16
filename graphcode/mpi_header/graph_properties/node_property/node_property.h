@@ -27,8 +27,8 @@ private:
     std::vector<std::vector<std::pair<int32_t, T>>> reduction_queue;
 
     // TODO(Rohan): Experiment with better choices of data structures for the following buffer variables
-    bool atomic_add_buffer_ready;
-    bool write_buffer_ready;
+    bool atomic_add_buffer_ready = false;
+    bool write_buffer_ready = false;
     std::vector<std::vector<T>> atomic_add_buffer;
     std::vector<std::vector<T>> write_buffer;
     std::set<std::pair<int, int>> atomic_add_change_log;
