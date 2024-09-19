@@ -215,19 +215,19 @@ usedVariables getVarsBFS(iterateBFS *stmt)
   return currVars;
 }
 
-usedVariables getVarsBFS(iterateBFS2 *stmt)
-{
-  usedVariables currVars = GetVarsStatement(stmt->getBody());
-  if (stmt->getRBFS() != nullptr)
-  {
-    iterateReverseBFS *RBFSstmt = stmt->getRBFS();
-    if (RBFSstmt->getBFSFilter() != nullptr)
-      currVars.merge(GetVarsExpr(RBFSstmt->getBFSFilter()));
-    currVars.merge(GetVarsStatement(RBFSstmt->getBody()));
-  }
+// usedVariables getVarsBFS(iterateBFS2 *stmt)
+// {
+//   usedVariables currVars = GetVarsStatement(stmt->getBody());
+//   if (stmt->getRBFS() != nullptr)
+//   {
+//     iterateReverseBFS *RBFSstmt = stmt->getRBFS();
+//     if (RBFSstmt->getBFSFilter() != nullptr)
+//       currVars.merge(GetVarsExpr(RBFSstmt->getBFSFilter()));
+//     currVars.merge(GetVarsStatement(RBFSstmt->getBody()));
+//   }
 
-  return currVars;
-}
+//   return currVars;
+// }
 
 usedVariables GetVarsForAll(forallStmt *stmt)
 {

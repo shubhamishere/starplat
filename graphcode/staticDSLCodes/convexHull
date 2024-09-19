@@ -1,0 +1,160 @@
+// function extremePoints(container<int> xCoord, container<int> yCoord){
+//     container<int>ans;
+//     int minIndex;
+//     int maxIndex;
+//     int minX = 100000000;
+//     int maxX = -1;
+
+//     int index = 0;
+//     while(index < xCoord.size()){
+//         int v = xCoord[index];
+//         if(v < minX){
+//             minX = v;
+//             minIndex = index;
+//         }
+//         if(v > maxX){
+//             maxX = v;
+//             maxIndex = index;
+//         }
+//         index++;
+//     }
+
+//     ans.push_back(minIndex);
+//     ans.push_back(maxIndex);
+
+//     return ans;
+// }
+
+// function calculateDistance(container<int> xCoord, container<int> yCoord, int left, int right, int index){
+//     double ans;
+//     int lx = xCoord[left];
+//     int ly = yCoord[left];
+//     int rx = xCoord[right];
+//     int ry = yCoord[right];
+
+//     int x = xCoord[index];
+//     int y = yCoord[index];
+
+//     int x1 = rx - lx;
+//     int y1 = ry - ly;
+//     int x2 = x - lx;
+//     int y2 = y - ly;
+
+//     // float mod = sqrt(x1 * x1 + y1 * y1);
+//     ans = (x1 * y2 - y1 * x2);
+
+//     return ans;
+// }
+
+// function updateDistance(container<int>label, container<float>distance, container<int>xCoord, container<int>yCoord, container<int>L, container<int>R){
+//     forall(v in L){
+//         int lab = label[v];
+//         int left = R[lab];
+//         lab = lab + 1;
+//         int right = R[lab];
+//         int dist = calculateDistance(xCoord, yCoord, left, right, v);
+//         distance[v] = dist;
+//     }
+// }
+
+// function updateHull(container<float>distance, container<int>xCoord, container<int>yCoord, container<int>R, container<int>mark, container<int>label){
+//     int minDist = 100000000;
+//     int minIndex;
+//     int index = 0;
+//     int currLabel = -1;
+//     for(v in distance){
+//         if(mark[index] && v >= 0){
+//             if(currLabel == -1){
+//                 currLabel = label[index];
+//             }
+//             else if(label[index] != currLabel){
+//                 mark[minIndex] = 0;
+//                 R.push_back(minIndex);
+//                 currLabel = label[index];
+//             }
+//             else{
+//                 if(v < minDist){
+//                     minDist = v;
+//                     minIndex = index;
+//                 }
+//             }
+//         }
+//         index++;
+//     }
+// }
+
+// function updateLabel(container<int>label, container<int>R){
+    
+// }
+
+function convexHull(int n, container<int> xCoord, container<int> yCoord){
+
+    container<int> label;
+    container<float> distance;
+    container<int> L;
+    container<int> R;
+    container<int>mark;
+
+    int A;
+    int B;
+    container<int>extreme;
+    extreme = extremePoints(xCoord, yCoord);
+    A = extreme.front();
+    B = extreme.back();
+
+    int index = 0;
+    while(index < n){
+        label.push_back(0);
+        
+        if(index == A || index == B){
+            R.push_back(index);
+        }
+        else{
+            L.push_back(index);
+            mark[index] = 1;
+        }
+        index++;
+    }
+
+    updateDistance(label, distance, xCoord, yCoord, L, R);
+
+    int upperHull = 0;
+    float upperDist = 0;
+    int lowerHull = -1;
+    float lowerDist = -1;
+
+    for(v in L){
+        // if(distance[v] < 0 && upperDist > distance[v]){
+        //     upperHull = v;
+        //     upperDist = distance[v];
+        // }
+        // else if(distance[v] > 0 && lowerDist < distance[v]){
+        //     lowerDist = distance[v];
+        //     lowerHull = v;
+        // }
+    }
+
+    R.push_back(upperHull);
+    mark[upperHull] = 0;
+    R.push_back(lowerHull);
+    mark[lowerHull] = 0;
+
+    int prevHullSize = -1;
+    int currHullSize = R.size();
+    while(currHullSize != prevHullSize){
+
+        updateDistance(label, distance, xCoord, yCoord, L, R);
+
+        updateHull(distance, xCoord, yCoord, R, mark, label);
+
+        updateLabel(label, R);
+
+        prevHullSize = currHullSize;
+        currHullSize = R.size();
+
+    }
+
+
+    // return R;
+
+}
