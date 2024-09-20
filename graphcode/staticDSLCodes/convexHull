@@ -46,16 +46,16 @@
 //     return ans;
 // }
 
-// function updateDistance(container<int>label, container<float>distance, container<int>xCoord, container<int>yCoord, container<int>L, container<int>R){
-//     forall(v in L){
-//         int lab = label[v];
-//         int left = R[lab];
-//         lab = lab + 1;
-//         int right = R[lab];
-//         int dist = calculateDistance(xCoord, yCoord, left, right, v);
-//         distance[v] = dist;
-//     }
-// }
+function updateDistance(container<int>label, container<float>distance, container<int>xCoord, container<int>yCoord, container<int>L, container<int>R){
+    forall(v in L){
+        int lab = label[v];
+        int left = R[lab];
+        lab = lab + 1;
+        int right = R[lab];
+        int dist = calculateDistance(xCoord, yCoord, left, right, v);
+        distance[v] = dist;
+    }
+}
 
 // function updateHull(container<float>distance, container<int>xCoord, container<int>yCoord, container<int>R, container<int>mark, container<int>label){
 //     int minDist = 100000000;
@@ -83,78 +83,79 @@
 //     }
 // }
 
-// function updateLabel(container<int>label, container<int>R){
+// // function updateLabel(container<int>label, container<int>R){
     
-// }
+// // }
 
 function convexHull(int n, container<int> xCoord, container<int> yCoord){
 
-    container<int> label;
-    container<float> distance;
-    container<int> L;
-    container<int> R;
-    container<int>mark;
+//     container<int> label;
+//     container<float> distance;
+//     container<int> L;
+//     container<int> R;
+//     container<int>mark;
 
-    int A;
-    int B;
-    container<int>extreme;
-    extreme = extremePoints(xCoord, yCoord);
-    A = extreme.front();
-    B = extreme.back();
+//     int A;
+//     int B;
+//     container<int>extreme;
+//     extreme = extremePoints(xCoord, yCoord);
+//     A = extreme.front();
+//     B = extreme.back();
 
-    int index = 0;
-    while(index < n){
-        label.push_back(0);
+//     int index = 0;
+//     while(index < n){
+//         label.push_back(0);
         
-        if(index == A || index == B){
-            R.push_back(index);
-        }
-        else{
-            L.push_back(index);
-            mark[index] = 1;
-        }
-        index++;
-    }
+//         if(index == A || index == B){
+//             R.push_back(index);
+//         }
+//         else{
+//             L.push_back(index);
+//             mark[index] = 1;
+//         }
+//         index++;
+//     }
 
-    updateDistance(label, distance, xCoord, yCoord, L, R);
+//     updateDistance(label, distance, xCoord, yCoord, L, R);
 
-    int upperHull = 0;
-    float upperDist = 0;
-    int lowerHull = -1;
-    float lowerDist = -1;
+//     int upperHull = 0;
+//     float upperDist = 0;
+//     int lowerHull = -1;
+//     float lowerDist = -1;
 
-    for(v in L){
-        // if(distance[v] < 0 && upperDist > distance[v]){
-        //     upperHull = v;
-        //     upperDist = distance[v];
-        // }
-        // else if(distance[v] > 0 && lowerDist < distance[v]){
-        //     lowerDist = distance[v];
-        //     lowerHull = v;
-        // }
-    }
+//     for(v in L){
 
-    R.push_back(upperHull);
-    mark[upperHull] = 0;
-    R.push_back(lowerHull);
-    mark[lowerHull] = 0;
+//         if(distance[v] < 0 && upperDist > distance[v]){
+//             upperHull = v;
+//             upperDist = distance[v];
+//         }
+//         else if(distance[v] > 0 && lowerDist < distance[v]){
+//             lowerDist = distance[v];
+//             lowerHull = v;
+//         }
+//     }
 
-    int prevHullSize = -1;
-    int currHullSize = R.size();
-    while(currHullSize != prevHullSize){
+//     R.push_back(upperHull);
+//     mark[upperHull] = 0;
+//     R.push_back(lowerHull);
+//     mark[lowerHull] = 0;
 
-        updateDistance(label, distance, xCoord, yCoord, L, R);
+//     int prevHullSize = -1;
+//     int currHullSize = R.size();
+//     while(currHullSize != prevHullSize){
 
-        updateHull(distance, xCoord, yCoord, R, mark, label);
+//         updateDistance(label, distance, xCoord, yCoord, L, R);
 
-        updateLabel(label, R);
+//         updateHull(distance, xCoord, yCoord, R, mark, label);
 
-        prevHullSize = currHullSize;
-        currHullSize = R.size();
+//         updateLabel(label, R);
 
-    }
+//         prevHullSize = currHullSize;
+//         currHullSize = R.size();
+
+//     }
 
 
-    // return R;
+//     return R;
 
 }
