@@ -91,11 +91,11 @@ namespace sphip {
         GenerateFunctionBody(func);
         main.NewLine();
 
-        GenerateTimerStart();
+        // GenerateTimerStart();
         // GenerateHipMallocParams(func->getParamList()); //TODO: impl
         GenerateBlock(func->getBlockStatement(), false);
         
-        GenerateTimerStop();
+        // GenerateTimerStop();
 
         GenerateHipMemcpyParams(func->getParamList());
 
@@ -108,12 +108,7 @@ namespace sphip {
 
         // TODO: Add function to increment indentation
 
-        if(func->containsReturn()){
-            targetFile.pushString("__device__ auto");
-        }
-        else{
-            targetFile.pushString("__global__ void");
-        }
+        targetFile.pushString("void");
         targetFile.AddSpace();
         std::cout << func->getIdentifier()->getIdentifier() << std::endl;
         targetFile.pushString(func->getIdentifier()->getIdentifier());
@@ -207,7 +202,7 @@ namespace sphip {
         CheckAndGenerateVariables(func, "d");
         CheckAndGenerateHipMalloc(func);
         CheckAndGenerateMemcpy(func);
-        GenerateLaunchConfiguration();
+        // GenerateLaunchConfiguration();
     }
 
     void DslCppGenerator::SetCurrentFunction(Function* func) {
@@ -283,6 +278,8 @@ namespace sphip {
                     string innerString = valType;
                     vecString = vecString + innerString;
                     vecString = vecString + ">";
+
+                    vecString = innerString + "*";
 
                     copy(vecString.begin(), vecString.end(), newS);
                     newS[vecString.size()] = '\0';
@@ -555,6 +552,8 @@ namespace sphip {
                 vecString = vecString + innerString;
                 vecString = vecString + ">";
 
+                vecString = innerString + "*";
+
                 copy(vecString.begin(), vecString.end(), newS);
                 newS[vecString.size()] = '\0';
                 return newS; 
@@ -705,9 +704,9 @@ namespace sphip {
 
               if(stmt->getdeclId()->getSymbolInfo()->getId()->isLocalMapReq()){
 
-                 main.pushString("std::vector<");
+                //  main.pushString("std::vector<");
                  main.pushString(convertToCppType(type));
-                 main.pushstr_space(">");
+                 main.pushstr_space("*");
 
                  main.pushString(stmt->getdeclId()->getIdentifier());
                  main.pushString("_local");
@@ -865,7 +864,7 @@ namespace sphip {
     
 
     void DslCppGenerator::GenerateIfStmt(ifStmt* stmt, bool isMainFile) {
-
+        std::cout<<"Entered IF BLOCK..\n";
         dslCodePad& targetFile = isMainFile ? main : header;
         Expression* condition = stmt->getCondition();
 
@@ -928,12 +927,24 @@ namespace sphip {
             list<Identifier*> vars = usedVars.getVariables();
 
             for (Identifier* iden : vars) {
+                std::cout<<"IDENTIFIER "<<iden->getIdentifier()<<"\n";
                 Type* type = iden->getSymbolInfo()->getType();
 
                 if (type->isPrimitiveType())
                     GenerateHipMemCpySymbol(iden->getIdentifier(), ConvertToCppType(type), true);
+                else if(type->isCollectionType()){
+                    std::cout<<"COLLECTION TYPE\n";
+                    string memcpy = ConvertToCppType(type) + " d_" + iden->getIdentifier() + " = (" + ConvertToCppType(type) + ")memset(sizeof(int) * " + iden->getIdentifier() + ".size());\n";
+                    memcpy = memcpy + "hipMemcpyToSymbol(" + "d_" + string(iden->getIdentifier())
+                    + ", &" + string(iden->getIdentifier()) + ", " + "sizeof(" + ConvertToCppType(type)  
+                    + "), 0, hipMemcpyHostToDevice);\n";
+                    targetFile.pushString(memcpy);
+                }
             }
+            
 
+            GenerateLaunchConfiguration();
+            
             main.pushString(GetCurrentFunction()->getIdentifier()->getIdentifier());
             std::string temp = "_kernel" + to_string(loopNum);
             main.pushString(temp);
@@ -957,6 +968,10 @@ namespace sphip {
                     parameterName = ", d" + parameterName;
                     main.pushString(/*createParamName(*/ parameterName);
                 }
+                else if(type->isCollectionType()){
+                    string parameterName = ", d_" + std::string(iden->getIdentifier());
+                    main.pushString(parameterName);
+                }
             }
             main.pushString(")");
             main.pushStringWithNewLine(";");
@@ -967,13 +982,19 @@ namespace sphip {
                 Type* type = iden->getSymbolInfo()->getType();
                 if (type->isPrimitiveType())
                     GenerateHipMemCpySymbol(iden->getIdentifier(), ConvertToCppType(type), false);
+                else if(type->isCollectionType()){
+                    string memcpy = "";
+                    memcpy = memcpy + "hipMemcpyToSymbol(" + "&" + string(iden->getIdentifier()) + ", " + "d_" + string(iden->getIdentifier()) + ", sizeof(" + ConvertToCppType(type)  
+                    + "), 0, hipMemcpyDeviceToHost);\n";
+                    targetFile.pushString(memcpy);
+                }
             }
 
             GenerateHipKernel(stmt);
 
         } else {
 
-            std::cout << "HIT inside FORALL ELSE";
+            std::cout << "HIT inside FORALL ELSE\n";
 
             GenerateForAllSignature(stmt, false);  // FOR LINE
 
@@ -983,6 +1004,7 @@ namespace sphip {
             }
 
             if (extractElemFunc != NULL) {
+                std::cout<<"CHECK HERE..\n";
                 if (NeighbourIteration(iteratorMethodId->getIdentifier())) {  
                     
                     char* wItr = stmt->getIterator()->getIdentifier();  // w iterator
@@ -1056,7 +1078,8 @@ namespace sphip {
                         GenerateStatement(stmt->getBody(), false);
 
                 } else {
-                    GenerateStatement(stmt->getBody(), false);
+                    GenerateBlock((blockStatement*)body, false);  //FOR BODY for
+                    targetFile.pushstr_newL("\n}\n");
                 }
 
                 if (stmt->isForall() && stmt->hasFilterExpr()) {
@@ -1477,17 +1500,17 @@ namespace sphip {
         } else {
 
             // HIT_CHECK
+            GenerateExpressionProcCallExpression(proc, isMainFile);
+            main.pushstr_newL(";");
             main.NewLine();
-            GenerateExpressionProcCallExpression(proc, true);
-              main.pushstr_newL(";");
-              main.NewLine();
 
         }
         
     }
 
-    void DslCppGenerator::generate_exprIndex(Expression* expr, bool isLocal){
+    void DslCppGenerator::generate_exprIndex(Expression* expr, bool isLocal, bool isMainFile){
 
+        dslCodePad & targetFile = (isMainFile ? main : header);
         char strBuffer[1024];
         Expression* mapExpr = expr->getMapExpr();
         Expression* indexExpr = expr->getIndexExpr();
@@ -1496,32 +1519,32 @@ namespace sphip {
 
         if(indexExpr->isIdentifierExpr()){
 
-        cout<<"entered here for indentifier gen for indexexpr"<<"\n";
-        Identifier* indexExprId = indexExpr->getId();  
+            cout<<"entered here for indentifier gen for indexexpr"<<"\n";
+            Identifier* indexExprId = indexExpr->getId();  
 
-        if(isLocal)
-            sprintf(strBuffer , "%s_local[omp_get_thread_num()][%s]", mapExprId->getIdentifier() , indexExprId->getIdentifier());
-        else
-        sprintf(strBuffer , "%s[%s]", mapExprId->getIdentifier() , indexExprId->getIdentifier());
+            if(isLocal)
+                sprintf(strBuffer , "%s_local[omp_get_thread_num()][%s]", mapExprId->getIdentifier() , indexExprId->getIdentifier());
+            else
+                sprintf(strBuffer , "%s[%s]", mapExprId->getIdentifier() , indexExprId->getIdentifier());
 
-        cout<<"string gen "<<strBuffer<<"\n";
-        main.pushString(strBuffer);
+            cout<<"string gen "<<strBuffer<<"\n";
+            targetFile.pushString(strBuffer);
         }
         else if(indexExpr->isPropIdExpr()){
 
-        cout<<"entered here for index "<<"\n";
-        if(isLocal){
-        sprintf(strBuffer, "%s_local[omp_get_thread_num()][", mapExprId->getIdentifier());
-        main.pushString(strBuffer);
-        // generate_exprPropId(indexExpr->getPropId(), true);
-        main.pushString("]");
-        }
-        else {
-        sprintf(strBuffer, "%s[", mapExprId->getIdentifier());
-        main.pushString(strBuffer);
-        // generate_exprPropId(indexExpr->getPropId(), true);
-        main.pushString("]");
-        }
+            cout<<"entered here for index "<<"\n";
+            if(isLocal){
+                sprintf(strBuffer, "%s_local[omp_get_thread_num()][", mapExprId->getIdentifier());
+                targetFile.pushString(strBuffer);
+                // generate_exprPropId(indexExpr->getPropId(), true);
+                targetFile.pushString("]");
+            }
+            else {
+                sprintf(strBuffer, "%s[", mapExprId->getIdentifier());
+                targetFile.pushString(strBuffer);
+                // generate_exprPropId(indexExpr->getPropId(), true);
+                targetFile.pushString("]");
+            }
 
         }
 
@@ -1566,7 +1589,7 @@ namespace sphip {
 
           } }
 
-         generate_exprIndex(expr, false);
+         generate_exprIndex(expr, false, isMainFile);
 
           if(expr->getTypeofExpr() == TYPE_BOOL){
             if(expr->getMapExpr()->getId()->getSymbolInfo()!= NULL){
@@ -1717,12 +1740,13 @@ namespace sphip {
             target.pushString(")");
     }
 
-    void DslCppGenerator::generateArgList(list<argument*> argList, bool addBraces){
+    void DslCppGenerator::generateArgList(list<argument*> argList, bool addBraces, bool isMainFile){
 
+        dslCodePad & targetFile = (isMainFile ? main : header);
         char strBuffer[1024]; 
 
         if(addBraces)
-            main.pushString("(") ;
+            targetFile.pushString("(") ;
 
         int argListSize = argList.size();
         int commaCounts = 0;
@@ -1733,15 +1757,15 @@ namespace sphip {
             argument* arg = *itr;
             Expression* expr = arg->getExpr();//->getId();
             //sprintf(strBuffer, "%s", id->getIdentifier());
-        // main.pushString(strBuffer);
-            GenerateExpression(expr, true);
+        // targetFile.pushString(strBuffer);
+            GenerateExpression(expr, isMainFile);
             if(commaCounts < argListSize)
-            main.pushString(",");
+            targetFile.pushString(",");
 
         }
         
         if(addBraces)
-            main.pushString(")");
+            targetFile.pushString(")");
     }
 
 
@@ -1822,7 +1846,7 @@ namespace sphip {
                     Expression* mapExpr = indexExpr->getMapExpr();
                     Identifier* mapExprId = mapExpr->getId();
 
-                    generate_exprIndex(indexExpr, true);
+                    generate_exprIndex(indexExpr, true, isMainFile);
 
                     sprintf(strBuffer,".%s", getProcName(proc).data());
                 } 
@@ -1833,17 +1857,17 @@ namespace sphip {
                 }
 
 
-                main.pushString(strBuffer);
+                targetFile.pushString(strBuffer);
 
             if(methodId == "insert"){
                 
-                main.pushString("(");
+                targetFile.pushString("(");
 
                 if(indexExpr != NULL){
                     Expression* mapExpr = indexExpr->getMapExpr();
                     Identifier* mapExprId = mapExpr->getId();
 
-                    generate_exprIndex(indexExpr, true);
+                    generate_exprIndex(indexExpr, true, isMainFile);
                 }
                 else if(objectId != NULL){
                     Identifier* id2 = proc->getId2();
@@ -1852,21 +1876,21 @@ namespace sphip {
                     else
                         sprintf(strBuffer,"%s",objectId->getIdentifier()); 
 
-                    main.pushString(strBuffer);      
+                    targetFile.pushString(strBuffer);      
                 }
 
-                main.pushString(".end()");
-                main.pushString(",");
-                generateArgList(argList,false);
-                main.pushString(".begin(),");
-                generateArgList(argList, false);
-                main.pushString(".end())");
+                targetFile.pushString(".end()");
+                targetFile.pushString(",");
+                generateArgList(argList,false, isMainFile);
+                targetFile.pushString(".begin(),");
+                generateArgList(argList, false, isMainFile);
+                targetFile.pushString(".end())");
                         
             }  
             else  
             {
                 cout << "isnide here 4"<<endl;
-                generateArgList(argList, true);   
+                generateArgList(argList, true, isMainFile);   
             } 
         }
     }
@@ -2081,6 +2105,11 @@ namespace sphip {
                     header.pushString(/*createParamName(*/ strBuffer);
                 }
             }
+            else if(type->isCollectionType()){
+                string parameter = "";
+                parameter = parameter + ", " + ConvertToCppType(type).c_str() + " " + iden->getIdentifier();
+                header.pushString(parameter);
+            }
         }
 
         header.pushStringWithNewLine("){ // BEGIN KER FUN via ADDKERNEL");
@@ -2184,14 +2213,46 @@ namespace sphip {
             }
         }
         else if (stmt->isSourceField()) {
+            std::cout<<"Source Field\n";
+        } 
+        else if(stmt->isSourceExpr()){
+  
+            Expression* expr = stmt->getSourceExpr();
+            Expression* mapExpr = expr->getMapExpr();
+            Identifier* mapId = mapExpr->getId();
 
-        } else {
+            cout<<"ENTERED................................................."<<"\n";
+
+            if(mapId->getSymbolInfo()->getType()->gettypeId() == TYPE_CONTAINER){
+                main.pushString("for(int i = 0 ; i < ");
+                GenerateExpression(expr, isMainFile);
+                main.pushstr_newL(".size() ; i++)");
+                main.pushString("{\n");
+                sprintf(strBuffer, "int %s = ", iterator->getIdentifier());
+                main.pushString(strBuffer);
+                GenerateExpression(expr, isMainFile);
+                main.pushstr_newL("[i];\n");
+            } 
+            
+            // cout<<"REACHED HERE AFTER COMPLETING "<<"\n";
+            
+        }
+        else {
             Identifier* sourceId = stmt->getSource();
             if (sourceId != NULL) {
+                std::cout<<"CHECK\n";
                 if (sourceId->getSymbolInfo()->getType()->gettypeId() == TYPE_SETN) {  //FOR SET
                     main.pushStringWithNewLine("std::set<int>::iterator itr;");
                     std::sprintf(strBuffer, "for(itr=%s.begin();itr!=%s.end();itr++) ", sourceId->getIdentifier(), sourceId->getIdentifier());
                     main.pushstr_newL(strBuffer);
+                }
+                else if(sourceId->getSymbolInfo()->getType()->gettypeId() == TYPE_CONTAINER){
+                    sprintf(strBuffer,"\nfor(int i = 0 ; i < %s.size() ; i++)",sourceId->getIdentifier());
+                    main.pushstr_newL(strBuffer); 
+                    main.pushString("{\n");
+                    sprintf(strBuffer, "int %s = %s[i];\n", iterator->getIdentifier(), sourceId->getIdentifier());
+                    main.pushstr_newL(strBuffer); 
+
                 }
             }
         }

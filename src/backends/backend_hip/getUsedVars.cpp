@@ -38,6 +38,18 @@ usedVariables GetVarsExpr(Expression *expr)
         result = GetVarsExpr(expr->getLeft());
         result.merge(GetVarsExpr(expr->getRight()));
     }
+    else if(expr->isIndexExpr()){
+      std::cout<<"USED VARS INDEX EXPRESSION\n";
+
+      Expression* mapExpr = expr->getMapExpr();
+      Expression* indexExpr = expr->getIndexExpr();
+      Identifier* indexExprId = indexExpr->getId(); 
+
+      Identifier* mapExprId = mapExpr->getId();
+      result.addVariable(mapExprId, READ);
+      result.addVariable(indexExprId, READ);
+
+    }
     return result;
 }
 
@@ -70,6 +82,16 @@ usedVariables GetVarsAssignment(assignment *stmt)
   }
   else if (stmt->lhs_isIdentifier())
     currVars.addVariable(stmt->getId(), WRITE);
+  else if(stmt->lhs_isIndexAccess()){
+    Expression* expr = stmt->getIndexAccess();
+    Expression* mapExpr = expr->getMapExpr();
+    Expression* indexExpr = expr->getIndexExpr();
+    Identifier* indexExprId = indexExpr->getId();
+
+    Identifier* mapExprId = mapExpr->getId();
+    currVars.addVariable(mapExprId, READ);
+    currVars.addVariable(indexExprId, READ);
+  }
 
   usedVariables exprVars = GetVarsExpr(stmt->getExpr());
   currVars.merge(exprVars);
@@ -231,6 +253,7 @@ usedVariables getVarsBFS(iterateBFS *stmt)
 
 usedVariables GetVarsForAll(forallStmt *stmt)
 {
+  std::cout<<"ENTER GET VARS\n";
   usedVariables currVars = GetVarsStatement(stmt->getBody());
   currVars.removeVariable(stmt->getIterator(), READ_WRITE);
 
