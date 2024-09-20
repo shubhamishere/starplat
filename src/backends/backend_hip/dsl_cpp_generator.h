@@ -116,9 +116,9 @@ namespace sphip {
 
 
         const char* convertToCppType(Type* type);
-        void generate_exprIndex(Expression* expr, bool isLocal);
+        void generate_exprIndex(Expression* expr, bool isLocal, bool isMainFile);
         string getProcName(proc_callExpr* proc);
-        void generateArgList(list<argument*> argList, bool addBraces);
+        void generateArgList(list<argument*> argList, bool addBraces, bool isMainFile);
 
         /**
          * TODO
