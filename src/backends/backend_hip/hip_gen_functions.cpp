@@ -159,31 +159,32 @@ namespace sphip {
                     strcpy(temp2, temp);
                     strcat(temp2, temp1.c_str());
 
-                    GenerateHipMemCpyStr((*itr)->getIdentifier()->getIdentifier(), temp2, ConvertToCppType(type->getInnerTargetType()), sizeofProp, 0);
+                    GenerateHipMemcpyStr((*itr)->getIdentifier()->getIdentifier(), temp2, ConvertToCppType(type->getInnerTargetType()), sizeofProp, 0);
                     
                 }
-    void DslCppGenerator::GenerateCopyBackToHost(const list<formalParam*> &paramList) {
-        
-        for(auto param: paramList) {
-
-            if(param->getType()->isPropType() && param->getType()->getInnerTargetType()->isPrimitiveType()) {
-
-                GenerateHipMemcpyStr(
-                    "h" + CapitalizeFirstLetter(param->getIdentifier()->getIdentifier()), 
-                    "d" + CapitalizeFirstLetter(param->getIdentifier()->getIdentifier()), 
-                    ConvertToCppType(param->getType()->getInnerTargetType()), 
-                    param->getType()->isPropEdgeType() ? "E" : "V", 
-                    false
-                );
-
             }
         }
     }
+    
+    // void DslCppGenerator::GenerateCopyBackToHost(const list<formalParam*> &paramList) {
+        
+    //     for(auto param: paramList) {
 
-    void DslCppGenerator::GenerateHipMalloc(
-        Type* type, 
-        const std::string &identifier
-    ) {
+    //         if(param->getType()->isPropType() && param->getType()->getInnerTargetType()->isPrimitiveType()) {
+
+    //             GenerateHipMemcpyStr(
+    //                 "h" + CapitalizeFirstLetter(param->getIdentifier()->getIdentifier()), 
+    //                 "d" + CapitalizeFirstLetter(param->getIdentifier()->getIdentifier()), 
+    //                 ConvertToCppType(param->getType()->getInnerTargetType()), 
+    //                 param->getType()->isPropEdgeType() ? "E" : "V", 
+    //                 false
+    //             );
+
+    //         }
+    //     }
+    // }
+
+    void DslCppGenerator::GenerateHipMalloc(Type* type, const std::string &identifier) {
 
         const std::string typeStr = type->isPrimitiveType() ? 
             ConvertToCppType(type) : ConvertToCppType(type->getInnerTargetType());
