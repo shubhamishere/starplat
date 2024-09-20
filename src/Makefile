@@ -1,7 +1,7 @@
 EXPENDABLES_WINDOWS = bin/MainContextj.o bin/ASTHelper.o bin/SymbolTableBuilder.o bin/SymbolTableNew.o bin/y.tab.o bin/lex.yy.o parser/y.tab.c parser/lex.yy.c bin/deviceVarsAnalyser.o bin/analyserUtil.o bin/dv*.o bin/bv*.o
 EXPENDABLES = bin/MainContext.o bin/ASTHelper.o bin/SymbolTableBuilder.o bin/SymbolTableNew.o bin/y.tab.o bin/lex.yy.o parser/y.tab.c parser/lex.yy.c  bin/deviceVarsAnalyser.o bin/blockVarsAnalyser.o
 ANALYSER = bin/dataRaceAnalyser.o
-PROGRAMS = bin/MainContext.o bin/ASTHelper.o bin/SymbolTableBuilder.o bin/SymbolTableNew.o bin/y.tab.o bin/lex.yy.o bin/cu_dsl_cpp_generator.o  bin/ac_dsl_cpp_generator.o bin/om_dsl_cpp_generator.o bin/mpi_dsl_cpp_generator.o bin/om_dyn_dsl_cpp_generator.o bin/mpi_dsl_cpp_generator_helper.o bin/mpi_dsl_cpp_expression_generator.o bin/mpi_dsl_cpp_statement_generator.o bin/mpi_dsl_dyn_cpp_generator.o bin/sycl_dsl_cpp_generator.o bin/multigpu_dsl_cpp_generator.o  bin/amd_dsl_cpp_generator.o bin/bAnalyzer.o
+PROGRAMS = bin/MainContext.o bin/ASTHelper.o bin/SymbolTableBuilder.o bin/SymbolTableNew.o bin/y.tab.o bin/lex.yy.o bin/cu_dsl_cpp_generator.o  bin/ac_dsl_cpp_generator.o bin/om_dsl_cpp_generator.o bin/hi_dsl_cpp_generator.o bin/hi_get_used_data.o bin/hi_auxillary_functions.o bin/hip_gen_functions.o bin/mpi_dsl_cpp_generator.o bin/om_dyn_dsl_cpp_generator.o bin/mpi_dsl_cpp_generator_helper.o bin/mpi_dsl_cpp_expression_generator.o bin/mpi_dsl_cpp_statement_generator.o bin/mpi_dsl_dyn_cpp_generator.o bin/sycl_dsl_cpp_generator.o bin/multigpu_dsl_cpp_generator.o  bin/amd_dsl_cpp_generator.o bin/bAnalyzer.o
 #bin/ac_dsl_cpp_generator.o 
 #bin/om_dsl_cpp_generator.o
 A_PROGRAM = bin/attachPropAnalyser.o bin/dataRaceAnalyser.o bin/deviceVarsAnalyser.o bin/blockVarsAnalyser.o bin/analyserUtil.o bin/pushpullAnalyser.o
@@ -45,6 +45,21 @@ bin/ac_dsl_cpp_generator.o: backends/backend_openACC/dsl_cpp_generator.cpp backe
 #omp
 bin/om_dsl_cpp_generator.o: backends/backend_omp/dsl_cpp_generator.cpp backends/dslCodePad.h
 	$(CC) $(CFLAGS) -c backends/backend_omp/dsl_cpp_generator.cpp -o bin/om_dsl_cpp_generator.o
+
+#hip
+
+bin/hi_get_used_data.o: backends/backend_hip/get_used_data.cpp backends/dslCodePad.h
+	$(CC) $(CFLAGS) -c backends/backend_hip/get_used_data.cpp -o bin/hi_get_used_data.o
+
+bin/hi_auxillary_functions.o: backends/backend_hip/auxillary_functions.cpp backends/dslCodePad.h
+	$(CC) $(CFLAGS) -c backends/backend_hip/auxillary_functions.cpp -o bin/hi_auxillary_functions.o
+
+bin/hip_gen_functions.o: backends/backend_hip/hip_gen_functions.cpp backends/dslCodePad.h
+	$(CC) $(CFLAGS) -c backends/backend_hip/hip_gen_functions.cpp -o bin/hip_gen_functions.o
+
+bin/hi_dsl_cpp_generator.o: backends/backend_hip/dsl_cpp_generator.cpp backends/dslCodePad.h
+	$(CC) $(CFLAGS) -c backends/backend_hip/dsl_cpp_generator.cpp -o bin/hi_dsl_cpp_generator.o
+
 
 #mpi
 bin/mpi_dsl_cpp_generator.o: backends/backend_mpi/dsl_cpp_generator.h backends/backend_mpi/dsl_cpp_generator.cpp backends/dslCodePad.h
@@ -161,7 +176,6 @@ bin/lex.yy.o: parser/lexer.l parser/lrparser.y
 
 bin:
 	mkdir -p bin
-	mkdir -p ../graphcode/generated_omp
 
 clean_windows:
 	rm -f $(EXPENDABLES_WINDOWS)

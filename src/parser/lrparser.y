@@ -1,10 +1,9 @@
+%define parse.trace
 %{
 	#include <stdio.h>
 	#include <string.h>
 	#include <stdlib.h>
 	#include <stdbool.h>
-    #include <sys/stat.h>
-    #include <sys/types.h>
     #include "includeHeader.hpp"
 	#include "../analyser/attachProp/attachPropAnalyser.h"
 	#include "../analyser/dataRace/dataRaceAnalyser.h"
@@ -62,8 +61,7 @@
 %token T_BFS T_REVERSE
 %token T_INCREMENTAL T_DECREMENTAL T_STATIC T_DYNAMIC
 %token T_BATCH T_ONADD T_ONDELETE
-%token T_HEAP
-%token T_MAP
+%token return_func
 
 
 %token <text> ID
@@ -72,11 +70,11 @@
 %token <bval> BOOL_VAL
 %token <cval> CHAR_VAL
 
-%type <node> function_def function_data function_body param
+%type <node> function_def function_data  return_func function_body param
 %type <pList> paramList
 %type <node> statement blockstatements assignment declaration proc_call control_flow reduction return_stmt batch_blockstmt on_add_blockstmt on_delete_blockstmt
 %type <node> type type1 type2 type3
-%type <node> primitive graph collections heap map property container nodemap vector hashmap hashset
+%type <node> primitive graph collections property container nodemap vector hashmap hashset
 %type <node> id leftSide rhs expression oid val boolean_expr unary_expr indexExpr tid  
 %type <node> bfs_abstraction filterExpr reverse_abstraction
 %type <nodeList> leftList rightList
@@ -121,7 +119,7 @@ function_data: T_FUNC id '(' paramList ')' {
 										   Util::resetTemp(tempIds);
 										   tempIds.clear();
 	                                      };
-			   | T_STATIC id '(' paramList ')' { 
+			   | T_STATIC id '(' paramList ')' {
 										   $$=Util::createStaticFuncNode($2,$4->PList);
                                             Util::setCurrentFuncType(STATIC_FUNC);
 											Util::resetTemp(tempIds);
@@ -237,8 +235,6 @@ declaration : type1 id   {
 type1: primitive {$$=$1; };
 	| graph {$$=$1;};
 	| collections { $$=$1;};
-	| heap { $$=$1;};
-	| map { $$=$1;};
 
 
 primitive: T_INT { $$=Util::createPrimitiveTypeNode(TYPE_INT);};
@@ -263,9 +259,6 @@ collections : T_LIST { $$=Util::createCollectionTypeNode(TYPE_LIST,NULL);};
 		| nodemap   {$$ = $1;}
 		| hashmap {$$ = $1;}
 	    | hashset {$$ = $1;}
-
-heap : T_HEAP { $$=Util::createHeapTypeNode(TYPE_HEAP);};
-map : T_MAP { $$=Util::createMapTypeNode(TYPE_MAP);};
 
 container : T_CONTAINER '<' type '>' '(' arg_list ',' type ')' {$$ = Util::createContainerTypeNode(TYPE_CONTAINER, $3, $6->AList, $8);}
           | T_CONTAINER '<' type '>' '(' arg_list ')' { $$ =  Util::createContainerTypeNode(TYPE_CONTAINER, $3, $6->AList, NULL);}
@@ -504,20 +497,6 @@ id : ID   {
 
 %%
 
-void create_directory(const char *backendTarget) {
-    char directory_name[256];
-    snprintf(directory_name, sizeof(directory_name), "../graphcode/generated_%s", backendTarget);
-    // Check if directory exists
-    struct stat st = {0};
-    if (stat(directory_name, &st) == -1) {
-        // Check if the mkdir fails
-        if (mkdir(directory_name, 0700) == -1) {
-            perror("mkdir");
-        }
-    } else {
-        printf("Directory already exists %s\n", directory_name);
-    }
-}
 
 void yyerror(const char *s) {
     fprintf(stderr, "%s\n", s);
@@ -528,7 +507,7 @@ int main(int argc,char **argv)
 {
   
   if(argc<4){
-    std::cout<< "Usage: " << argv[0] << " [-s|-d] -f <dsl.sp> -b [cuda|omp|mpi|acc|multigpu|amd] " << '\n';
+    std::cout<< "Usage: " << argv[0] << " [-s|-d] -f <dsl.sp> -b [cuda|omp|mpi|acc|multigpu|amd|hip] " << '\n';
     std::cout<< "E.g. : " << argv[0] << " -s -f ../graphcode/sssp_dslV2 -b omp " << '\n';
     exit(-1);
   }
@@ -589,7 +568,7 @@ int main(int argc,char **argv)
    else
     {
 
-		if(!((strcmp(backendTarget,"omp")==0)|| (strcmp(backendTarget,"amd")==0) || (strcmp(backendTarget,"mpi")==0)||(strcmp(backendTarget,"cuda")==0) || (strcmp(backendTarget,"acc")==0) || (strcmp(backendTarget,"sycl")==0)|| (strcmp(backendTarget,"multigpu")==0)))
+		if(!((strcmp(backendTarget,"hip")==0)||(strcmp(backendTarget,"omp")==0)|| (strcmp(backendTarget,"amd")==0) || (strcmp(backendTarget,"mpi")==0)||(strcmp(backendTarget,"cuda")==0) || (strcmp(backendTarget,"acc")==0) || (strcmp(backendTarget,"sycl")==0)|| (strcmp(backendTarget,"multigpu")==0)))
 
 		   {
 			  fprintf(stderr, "Specified backend target is not implemented in the current version!\n");
@@ -605,7 +584,6 @@ int main(int argc,char **argv)
      
 
 
-   create_directory(backendTarget);
    yyin= fopen(fileName,"r");
    
    if(!yyin) {
@@ -665,13 +643,18 @@ int main(int argc,char **argv)
 	}
 		  
         cpp_backend.generate();
-      } 
+      }
       else if (strcmp(backendTarget, "omp") == 0) {
         spomp::dsl_cpp_generator cpp_backend;
 	std::cout<< "size:" << frontEndContext.getFuncList().size() << '\n';
         cpp_backend.setFileName(fileName);
         cpp_backend.generate();
-      } 
+      }
+	  else if (strcmp(backendTarget, "hip") == 0) {
+        sphip::DslCppGenerator cpp_backend(fileName, 8);
+	std::cout<< "size:" << frontEndContext.getFuncList().size() << '\n';
+        cpp_backend.Generate();
+      }
 	  else if (strcmp(backendTarget, "mpi") == 0) {
         spmpi::dsl_cpp_generator cpp_backend;
 		std::cout<< "size:" << frontEndContext.getFuncList().size() << '\n';
