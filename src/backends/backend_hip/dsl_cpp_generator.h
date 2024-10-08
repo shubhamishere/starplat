@@ -114,6 +114,12 @@ namespace sphip {
          * Generation Functions
          */
 
+
+        const char* convertToCppType(Type* type);
+        void generate_exprIndex(Expression* expr, bool isLocal, bool isMainFile);
+        string getProcName(proc_callExpr* proc);
+        void generateArgList(list<argument*> argList, bool addBraces, bool isMainFile);
+
         /**
          * TODO
          */
@@ -252,30 +258,30 @@ namespace sphip {
          */
         void GenerateItrBfs(iterateBFS* stmt, bool isMainFile);
 
-        void GenerateItrBfs2(iterateBFS2* stmt, bool isMainFile);
+        // void GenerateItrBfs2(iterateBFS2* stmt, bool isMainFile);
 
         /**
          * TODO
          */
         void GenerateItrRevBfs(iterateReverseBFS* stmt, bool isMainFile);
 
-        void GenerateItrBfsRev(iterateBFSReverse* stmt, bool isMainFile);
+        // void GenerateItrBfsRev(iterateBFSReverse* stmt, bool isMainFile);
 
         void AddHipBFSIterationLoop(iterateBFS* stmt, bool generateRevBfs);
 
-        void AddHipBFS2IterationLoop(iterateBFS2* stmt, bool generateRevBfs);
+        // void AddHipBFS2IterationLoop(iterateBFS2* stmt, bool generateRevBfs);
 
         void AddHipRevBFSIterationLoop(iterateBFS* stmt);
 
-        void AddHipRevBFS2IterationLoop(iterateBFS2* stmt);
+        // void AddHipRevBFS2IterationLoop(iterateBFS2* stmt);
 
         void AddHipBFSIterKernel(iterateBFS* stmt, bool generateRevBfs);
 
-        void AddHipBFS2IterKernel(iterateBFS2* stmt, bool generateRevBfs);
+        // void AddHipBFS2IterKernel(iterateBFS2* stmt, bool generateRevBfs);
 
         void AddHipRevBFSIterKernel(list<statement*>& revStmtList, iterateBFS* bfsAbstraction);
 
-        void AddHipRevBFS2IterKernel(list<statement*>& revStmtList, iterateBFS2* bfsAbstraction);
+        // void AddHipRevBFS2IterKernel(list<statement*>& revStmtList, iterateBFS2* bfsAbstraction);
 
         /**
          * TODO
@@ -408,7 +414,7 @@ namespace sphip {
         /**
          * TODO
         */
-        void GenerateHipKernel(forallStmt *forAll);
+        // void GenerateHipKernel(forallStmt *forAll);
 
         /**
          * TODO
@@ -510,8 +516,8 @@ namespace sphip {
          */
         void GenerateHipMemcpyStr(const std::string &dst, const std::string &src, const std::string &typeStr, const std::string &sizeOfType, bool isHostToDevice = true);
 
-        void 
-          (const char* var, const char* typeStr, bool isHostToDevice);
+        // void 
+        //   (const char* var, const char* typeStr, bool isHostToDevice);
 
         /**
          * TODO
@@ -573,7 +579,7 @@ namespace sphip {
         std::string StripName(const std::string& name);
         void CastIfRequired(Type* type, Identifier* methodID, dslCodePad& main);
 
-        std::string CapitalizeFirstLetter(const std::string& name);
+        // std::string CapitalizeFirstLetter(const std::string& name);
 
         char* CapitalizeFirstLetter(char* name);
 
