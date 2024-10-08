@@ -20,16 +20,17 @@ int main(int argc, char *argv[])
     ComputePageRank(graph, beta, delta, maxIter, pageRank, world);
     double t2 = MPI_Wtime();
 
-//    print_mpi_statistics();
+    //    print_mpi_statistics();
     if (world.rank() == 0)
     {
         float sum = 0.0;
-        for (int i = 0; i < graph.num_nodes(); i++) {
+        for (int i = 0; i < graph.num_nodes(); i++)
+        {
             float v = pageRank.getValue(i);
             sum += v;
             printf("Node %d: %.6g\n", i, v);
         }
-       std::cout << "TIME:[" << (t2 - t1) << "]" << std::endl;
+        std::cout << "TIME:[" << (t2 - t1) << "]" << std::endl;
     }
 
     // world.barrier();

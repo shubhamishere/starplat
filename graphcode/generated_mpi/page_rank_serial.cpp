@@ -4,7 +4,8 @@
 #include <climits>
 #include <cmath>
 
-class Graph {
+class Graph
+{
 public:
     int nodesTotal;
     int startNode;
@@ -13,21 +14,26 @@ public:
     std::vector<std::vector<int>> adjList;
     std::vector<std::vector<int>> inAdjList;
 
-    Graph(const char* filename) {
+    // TODO: Refactor this class into a reusable component
+    Graph(const char *filename)
+    {
         startNode = INT_MAX;
         endNode = INT_MIN;
 
         std::ifstream file(filename);
-        if (!file.is_open()) {
+        if (!file.is_open())
+        {
             std::cerr << "Unable to open file\n";
             return;
         }
 
         int s, d, w;
-        while (file >> s >> d >> w) {
+        while (file >> s >> d >> w)
+        {
             startNode = std::min(std::min(s, d), startNode);
             endNode = std::max(std::max(s, d), endNode);
-            if (s >= adjList.size() || d >= adjList.size()) {
+            if (s >= adjList.size() || d >= adjList.size())
+            {
                 adjList.resize(std::max(s, d) + 1);
                 inAdjList.resize(std::max(s, d) + 1);
             }
@@ -43,28 +49,34 @@ public:
         std::cout << "Edges: " << edgeCount << "\n";
     }
 
-    std::vector<int> getInNeighbors(int v) {
+    std::vector<int> getInNeighbors(int v)
+    {
         return inAdjList[v];
     }
 
-    int num_out_nbrs(int v) {
+    int num_out_nbrs(int v)
+    {
         return adjList[v].size();
     }
 };
 
-void ComputePageRank(Graph& g, float beta, float delta, int maxIter,
-                     std::vector<float>& pageRank) {
+void ComputePageRank(Graph &g, float beta, float delta, int maxIter,
+                     std::vector<float> &pageRank)
+{
     int numNodes = g.nodesTotal;
     std::vector<float> pageRankNext(numNodes, 0.0f);
     std::fill(pageRank.begin(), pageRank.end(), 1.0f / numNodes);
     int iterCount = 0;
     float diff = 0.0f;
 
-    do {
+    do
+    {
         diff = 0.0f;
-        for (int v = g.startNode; v <= g.endNode; v++) {
+        for (int v = g.startNode; v <= g.endNode; v++)
+        {
             float sum = 0.0f;
-            for (int nbr : g.getInNeighbors(v)) {
+            for (int nbr : g.getInNeighbors(v))
+            {
                 sum += pageRank[nbr] / g.num_out_nbrs(nbr);
             }
 
@@ -78,8 +90,10 @@ void ComputePageRank(Graph& g, float beta, float delta, int maxIter,
     } while ((diff > beta) && (iterCount < maxIter));
 }
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
+int main(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
         std::cerr << "Usage: " << argv[0] << " <filename>\n";
         return 1;
     }
@@ -95,7 +109,8 @@ int main(int argc, char *argv[]) {
     clock_t end = clock();
 
     std::cout << "PageRank Values:\n";
-    for (int v = graph.startNode; v <= graph.endNode; v++) {
+    for (int v = graph.startNode; v <= graph.endNode; v++)
+    {
         std::cout << "Node " << v << ": " << pageRank[v] << "\n";
     }
 
