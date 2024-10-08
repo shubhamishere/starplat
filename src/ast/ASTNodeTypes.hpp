@@ -1745,7 +1745,7 @@ public:
   }
 };
 
-class iterateReverseBFS : public ASTNode
+class iterateReverseBFS : public statement
 {
 private:
   Expression *booleanExpr;

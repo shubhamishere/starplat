@@ -1,4 +1,5 @@
 #include "graph_mpi.h"
+#include "graph_mpi.h"
 #include "synchronize_p2p.hpp"
 #include "rma_datatype/rma_datatype.h"
 #include <iostream>

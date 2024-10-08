@@ -3,12 +3,17 @@
 
 #include "../property.h"
 #include "../../rma_datatype/rma_datatype.h"
+#include <unordered_set>
+#include <vector>
+#include <set>
+#include <boost/functional/hash.hpp>
 
 class Graph;
 
 template <typename T>
 class NodeProperty : public Property
 {
+private:
 private:
     int length;
 
@@ -20,11 +25,20 @@ private:
     std::vector<bool> already_locked_processors;
     std::vector<bool> already_locked_processors_shared;
     std::vector<std::vector<std::pair<int32_t, T>>> reduction_queue;
-    std::unordered_map<int, std::vector<std::vector<int>>> sync_later;
 
+    // TODO(Rohan): Experiment with better choices of data structures for the following buffer variables
+    bool atomic_add_buffer_ready = false;
+    bool write_buffer_ready = false;
+    std::vector<std::vector<T>> atomic_add_buffer;
+    std::vector<std::vector<T>> write_buffer;
+    std::set<std::pair<int, int>> atomic_add_change_log;
+    std::set<std::pair<int, int>> write_change_log;
+
+    // std::unordered_set<std::pair<int,int>, boost::hash<std::pair<int,int>>> atomic_add_change_log;
+    // std::unordered_set<std::pair<int,int>, boost::hash<std::pair<int,int>>> write_change_log;
 public:
     Rma_Datatype<T> propList;
-    void fatBarrier();
+    void syncAtomicAddsAndWrites();
     void leaveAllSharedLocks();
     NodeProperty() : Property(true)
     {
@@ -55,7 +69,6 @@ public:
     void assign_reduction_values(std::vector<std::vector<int32_t>> &modified_ids) override;
 
     void attachToGraph(Graph *graph, T initial_value);
-
     void attachToGraph(Graph *graph, T *initial_values);
 
     int32_t getPropertyId() override;
