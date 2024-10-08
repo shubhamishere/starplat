@@ -679,3 +679,119 @@ void bAnalyzer::clearAllAnalysis()
   iterVar = stack<char *>();
   lastIter[0] = '\0';
 }
+
+std::set<string> bAnalyzer::getPropertiesModifiedWithAtomicOps(statement *stmt)
+{
+  std::set<string> propsWithAtomicOps;
+
+  if (stmt == nullptr)
+  {
+    return propsWithAtomicOps;
+  }
+
+  switch (stmt->getTypeofNode())
+  {
+  case NODE_BLOCKSTMT:
+  {
+    blockStatement *blockStmt = static_cast<blockStatement *>(stmt);
+    for (auto &s : blockStmt->returnStatements())
+    {
+      auto properties = getPropertiesModifiedWithAtomicOps(s);
+      propsWithAtomicOps.insert(properties.begin(), properties.end());
+    }
+    break;
+  }
+  case NODE_ASSIGN:
+  {
+    assignment *assignStmt = static_cast<assignment *>(stmt);
+    PropAccess *propAccess = assignStmt->getPropId();
+    if (propAccess != nullptr)
+    {
+      ;
+      propsWithAtomicOps.insert(propAccess->getIdentifier2()->getIdentifier());
+    }
+    break;
+  }
+  case NODE_UNARYSTMT:
+  {
+    unary_stmt *unaryStmt = static_cast<unary_stmt *>(stmt);
+    Expression *unaryExpr = unaryStmt->getUnaryExpr();
+    if (unaryExpr->isPropIdExpr())
+    {
+      PropAccess *propAccess = unaryExpr->getPropId();
+      propsWithAtomicOps.insert(propAccess->getIdentifier1()->getIdentifier());
+    }
+    break;
+  }
+  case NODE_WHILESTMT:
+  {
+    whileStmt *whileStatement = static_cast<whileStmt *>(stmt);
+    auto whileNodes = getPropertiesModifiedWithAtomicOps(whileStatement->getBody());
+    propsWithAtomicOps.insert(whileNodes.begin(), whileNodes.end());
+    break;
+  }
+  case NODE_DOWHILESTMT:
+  {
+    dowhileStmt *doWhileStatement = static_cast<dowhileStmt *>(stmt);
+    auto doWhileNodes = getPropertiesModifiedWithAtomicOps(doWhileStatement->getBody());
+    propsWithAtomicOps.insert(doWhileNodes.begin(), doWhileNodes.end());
+    break;
+  }
+  case NODE_FIXEDPTSTMT:
+  {
+    fixedPointStmt *fixedPointStatement = static_cast<fixedPointStmt *>(stmt);
+    auto fixedPointNodes = getPropertiesModifiedWithAtomicOps(fixedPointStatement->getBody());
+    propsWithAtomicOps.insert(fixedPointNodes.begin(), fixedPointNodes.end());
+    break;
+  }
+  case NODE_IFSTMT:
+  {
+    ifStmt *ifStatement = static_cast<ifStmt *>(stmt);
+    auto ifNodes = getPropertiesModifiedWithAtomicOps(ifStatement->getIfBody());
+    propsWithAtomicOps.insert(ifNodes.begin(), ifNodes.end());
+    if (ifStatement->getElseBody() != nullptr)
+    {
+      auto elseNodes = getPropertiesModifiedWithAtomicOps(ifStatement->getElseBody());
+      propsWithAtomicOps.insert(elseNodes.begin(), elseNodes.end());
+    }
+    break;
+  }
+  case NODE_ITRBFS:
+  {
+    iterateBFS *iterateBFSStatement = static_cast<iterateBFS *>(stmt);
+    auto iterateBFSNodes = getPropertiesModifiedWithAtomicOps(iterateBFSStatement->getBody());
+    propsWithAtomicOps.insert(iterateBFSNodes.begin(), iterateBFSNodes.end());
+    break;
+  }
+  case NODE_ITRRBFS:
+  {
+    iterateReverseBFS *iterateReverseBFSStatement = static_cast<iterateReverseBFS *>(stmt);
+    auto iterateReverseBFSNodes = getPropertiesModifiedWithAtomicOps(iterateReverseBFSStatement->getBody());
+    propsWithAtomicOps.insert(iterateReverseBFSNodes.begin(), iterateReverseBFSNodes.end());
+    break;
+  }
+  case NODE_FORALLSTMT:
+  {
+    forallStmt *forAllStatement = static_cast<forallStmt *>(stmt);
+    auto forAllNodes = getPropertiesModifiedWithAtomicOps(forAllStatement->getBody());
+    propsWithAtomicOps.insert(forAllNodes.begin(), forAllNodes.end());
+    break;
+  }
+  case NODE_REDUCTIONCALL:
+  case NODE_REDUCTIONCALLSTMT:
+  {
+    reductionCallStmt *reductionStmt = static_cast<reductionCallStmt *>(stmt);
+    PropAccess *propAccess = reductionStmt->getPropAccess();
+    if (propAccess != nullptr)
+    {
+      propsWithAtomicOps.insert(propAccess->getIdentifier2()->getIdentifier());
+    }
+    break;
+  }
+  default:
+    // DEBUG_LOG("Unhandled node type: " + std::to_string(stmt->getTypeofNode()));
+    break;
+  }
+
+  return propsWithAtomicOps;
+}
