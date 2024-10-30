@@ -33,6 +33,8 @@ export OMP_NUM_THREADS=16
 g++ main.cpp -o main -fopenmp 
 ./main
 ```
+# Publication
+[StarPlat: A versatile DSL for graph analytics](https://www.sciencedirect.com/science/article/pii/S074373152400131X); Nibedita Behera, Ashwina Kumar, Ebenezer Rajadurai T, Sai Nitish, Rajesh Pandian M, Rupesh Nasre; IJPP 2024
 
 
 
