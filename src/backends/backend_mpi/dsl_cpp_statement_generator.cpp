@@ -7,10 +7,8 @@
 
 namespace spmpi
 {
-
     void dsl_cpp_generator::generateBFSAbstraction(iterateBFS *bfsAbstraction)
     {
-
         vector<Identifier *> graphIds = graphId[curFuncType][curFuncCount()];
         insideParallelConstruct.push_back(bfsAbstraction);
         char strBuffer[1024];
@@ -32,11 +30,21 @@ namespace spmpi
         assert(body->getTypeofNode() == NODE_BLOCKSTMT);
         blockStatement *block = (blockStatement *)body;
         list<statement *> statementList = block->returnStatements();
+
+        bAnalyzer analyser;
+
         for (statement *stmt : statementList)
         {
             generateStatement(stmt);
         }
         main.pushstr_newL("}");
+        // Add fat barriers to sync the atomicAdds on the properties
+        auto propsResponsibleByBFS = analysisForAll->getPropertiesModifiedWithAtomicOps(block);
+        for (string prop : propsResponsibleByBFS)
+        {
+            sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+            main.pushstr_newL(strBuffer);
+        }
         main.pushstr_newL("world.barrier();");
         main.pushstr_newL("}");
 
@@ -56,6 +64,14 @@ namespace spmpi
         }
 
         main.pushstr_newL("}");
+
+        // Add fat barriers to sync the atomicAdds on the properties
+        auto propsResponsibleByRBFS = analysisForAll->getPropertiesModifiedWithAtomicOps(revBlock);
+        for (string prop : propsResponsibleByRBFS)
+        {
+            sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+            main.pushstr_newL(strBuffer);
+        }
         main.pushstr_newL("world.barrier();");
         main.pushstr_newL("}");
         insideParallelConstruct.pop_back();
@@ -668,84 +684,100 @@ namespace spmpi
 
         if (stmt->getTypeofNode() == NODE_BLOCKSTMT)
         {
-            std::cout << "inside1" << std::endl;
+            std::cout << "-> 1" << std::endl;
             generateBlock((blockStatement *)stmt);
-            std::cout << "inside1" << std::endl;
+            std::cout << "<- 1" << std::endl;
         }
 
         if (stmt->getTypeofNode() == NODE_DECL)
         {
-            std::cout << "inside2" << std::endl;
+            std::cout << "-> 2" << std::endl;
             generateVariableDecl((declaration *)stmt);
-            std::cout << "inside2" << std::endl;
+            std::cout << "<- 2" << std::endl;
         }
+
         if (stmt->getTypeofNode() == NODE_ASSIGN)
         {
-            std::cout << "inside3" << std::endl;
+            std::cout << "-> 3" << std::endl;
             generateAssignmentStmt((assignment *)stmt);
-            std::cout << "inside3" << std::endl;
+            std::cout << "<- 3" << std::endl;
         }
 
         if (stmt->getTypeofNode() == NODE_WHILESTMT)
         {
-            std::cout << "inside4" << std::endl;
+            std::cout << "-> 4" << std::endl;
             generateWhileStmt((whileStmt *)stmt);
-            std::cout << "inside4" << std::endl;
+            std::cout << "<- 4" << std::endl;
         }
 
         if (stmt->getTypeofNode() == NODE_IFSTMT)
         {
-            std::cout << "inside5" << std::endl;
+            std::cout << "-> 5" << std::endl;
             generateIfStmt((ifStmt *)stmt);
-            std::cout << "inside5" << std::endl;
+            std::cout << "<- 5" << std::endl;
         }
 
         if (stmt->getTypeofNode() == NODE_DOWHILESTMT)
         {
-            std::cout << "inside6" << std::endl;
+            std::cout << "-> 6" << std::endl;
             generateDoWhileStmt((dowhileStmt *)stmt);
-            std::cout << "inside6" << std::endl;
+            std::cout << "<- 6" << std::endl;
         }
 
         if (stmt->getTypeofNode() == NODE_FORALLSTMT)
         {
-            std::cout << "inside7" << std::endl;
+            std::cout << "-> 7" << std::endl;
             generateForAll((forallStmt *)stmt);
-            std::cout << "inside7" << std::endl;
+            std::cout << "<- 7" << std::endl;
         }
 
         if (stmt->getTypeofNode() == NODE_FIXEDPTSTMT)
         {
-            std::cout << "inside8" << std::endl;
+            std::cout << "-> 8" << std::endl;
             generateFixedPoint((fixedPointStmt *)stmt);
-            std::cout << "inside8" << std::endl;
+            std::cout << "<- 8" << std::endl;
         }
+
         if (stmt->getTypeofNode() == NODE_REDUCTIONCALLSTMT)
         {
-            std::cout << "inside9" << std::endl;
+            std::cout << "-> 9" << std::endl;
             generateReductionStmt((reductionCallStmt *)stmt);
-            std::cout << "inside9" << std::endl;
+            std::cout << "<- 9" << std::endl;
         }
+
         if (stmt->getTypeofNode() == NODE_ITRBFS)
         {
-            std::cout << "inside10" << std::endl;
+            std::cout << "-> 10" << std::endl;
+            std::cout << "INSIDE ITERATE BFS" << std::endl;
             generateBFSAbstraction((iterateBFS *)stmt);
-            std::cout << "inside10" << std::endl;
+            std::cout << "<- 10" << std::endl;
         }
+
+        if (stmt->getTypeofNode() == NODE_ITRRBFS)
+        {
+            std::cout << "-> 11" << std::endl;
+            std::cout << "INSIDE ITERATE REVERSE BFS" << std::endl;
+            std::cout << "<- 11" << std::endl;
+        }
+
         if (stmt->getTypeofNode() == NODE_PROCCALLSTMT)
         {
-            std::cout << "inside11" << std::endl;
+            std::cout << "-> 12" << std::endl;
             generateProcCall((proc_callStmt *)stmt);
-            std::cout << "inside11" << std::endl;
+            std::cout << "<- 12" << std::endl;
         }
+
         if (stmt->getTypeofNode() == NODE_UNARYSTMT)
         {
+            std::cout << "-> 13" << std::endl;
             unary_stmt *unaryStmt = (unary_stmt *)stmt;
             generateExpr(unaryStmt->getUnaryExpr());
             main.pushstr_newL(";");
         }
+
         if (stmt->getTypeofNode() == NODE_RETURN)
         {
+            std::cout << "-> 14" << std::endl;
             returnStmt *returnStmtNode = (returnStmt *)stmt;
             main.pushstr_space("return");
             generateExpr(returnStmtNode->getReturnExpression());
@@ -843,6 +875,14 @@ namespace spmpi
             }
             std::cout << "here after\n";
 
+            // Add fat barriers to sync the atomicAdds on the properties
+            auto subset = analysisForAll->getPropertiesModifiedWithAtomicOps(forAll);
+            for (auto prop : subset)
+            {
+                sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+                main.pushstr_newL(strBuffer);
+            }
+
             main.pushstr_newL("world.barrier();");
         }
 
@@ -915,6 +955,14 @@ namespace spmpi
                 // checkAndGenerateFixedPtFilter(forAll);
             }
 
+            // Add fat barriers to sync the atomicAdds on the properties
+            auto subset = analysisForAll->getPropertiesModifiedWithAtomicOps(forAll);
+            for (auto prop : subset)
+            {
+                sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+                main.pushstr_newL(strBuffer);
+            }
+
             forallStack.pop_back();
             analysisForAll = callStackForAnalyzer.top();
             callStackForAnalyzer.pop();
@@ -952,6 +1000,16 @@ namespace spmpi
                 // main.pushstr_newL("world.barrier();");
                 // checkAndGenerateFixedPtFilter(forAll);
             }
+
+            // Add fat barriers to sync the atomicAdds on the properties
+            auto subset = analysisForAll->getPropertiesModifiedWithAtomicOps(forAll);
+            for (auto prop : subset)
+            {
+                sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+                main.pushstr_newL(strBuffer);
+            }
+
+            main.pushstr_newL("world.barrier();");
         }
         if (forAll->isForall() && forAll->containsReductionStatement())
         {
@@ -959,11 +1017,26 @@ namespace spmpi
             main.pushstr_newL(strBuffer);
         }
         if (forAll->isForall() && !ifStatementInForAll)
-            main.pushstr_newL("world.barrier();");
-        // Genereate code related to reduction at the end of for all
+        {
+            // Add fat barriers to sync the atomicAdds on the properties
+            auto subset = analysisForAll->getPropertiesModifiedWithAtomicOps(forAll);
+            for (auto prop : subset)
+            {
+                sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+                main.pushstr_newL(strBuffer);
+            }
 
+            main.pushstr_newL("world.barrier();");
+        }
+        // Genereate code related to reduction at the end of for all
         if (forAll->isForall() && forAll->getModifiedGlobalVariables().size() > 0)
         {
+            auto subset = analysisForAll->getPropertiesModifiedWithAtomicOps(forAll);
+            for (auto prop : subset)
+            {
+                sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+                main.pushstr_newL(strBuffer);
+            }
             for (TableEntry *te : forAll->getModifiedGlobalVariables())
             {
                 sprintf(strBuffer, "int %s_leader_rank_temp = %s_leader_rank;", te->getId()->getIdentifier(), te->getId()->getIdentifier());
@@ -1016,6 +1089,15 @@ namespace spmpi
         {
             main.pushstr_newL("}");
             ifStatementInForAll = true;
+
+            // Add fat barriers to sync the atomicAdds on the properties
+            auto subset = analysisForAll->getPropertiesModifiedWithAtomicOps(forAll);
+            for (auto prop : subset)
+            {
+                sprintf(strBuffer, "%s.syncAtomicAddsAndWrites();", prop.c_str());
+                main.pushstr_newL(strBuffer);
+            }
+
             main.pushstr_newL("world.barrier () ;");
         }
         main.NewLine();

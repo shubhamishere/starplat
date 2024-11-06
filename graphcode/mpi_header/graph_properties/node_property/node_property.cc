@@ -1,26 +1,27 @@
 #include "node_property.h"
 #include "../../graph_mpi.h"
+#include "node_property.h"
+#include "../../graph_mpi.h"
 
 template <typename T>
-void NodeProperty<T>::fatBarrier()
+void NodeProperty<T>::syncAtomicAddsAndWrites()
 {
-  /* Major slowdown ?? Investigating...
-  // synchronize the window.
-  propList.get_lock (0, SHARED_ALL_PROCESS_LOCK) ;
-  // MPI_Win_lock_all (0, window) ;
-  for (auto &sync_now:sync_later) {
-    int idx = sync_now.first ;
-    for (auto &message:sync_now.second) {
-        T owner_proc = message[0] ;
-        T local_node_id = message[1] ;
-        T value = message[2] ;
-        propList.accumulate(owner_proc,&value,local_node_id,1,MPI_SUM,SHARED_LOCK);
-      }
+  propList.get_lock(0, SHARED_ALL_PROCESS_LOCK);
+  for (const auto &[proc, local_node_id] : write_change_log)
+  {
+    propList.put_data(proc, &write_buffer[proc][local_node_id], local_node_id, 1, SHARED_LOCK);
+    write_buffer[proc][local_node_id] = 0;
   }
-  //MPI_Win_unlock_all (window) ;
-  propList.unlock (0, SHARED_ALL_PROCESS_LOCK) ;
-  sync_later.clear () ;
-  */
+  write_change_log.clear();
+
+  for (const auto &[proc, local_node_id] : atomic_add_change_log)
+  {
+    propList.accumulate(proc, &atomic_add_buffer[proc][local_node_id], local_node_id, 1, MPI_SUM, SHARED_LOCK);
+    atomic_add_buffer[proc][local_node_id] = 0;
+  }
+  atomic_add_change_log.clear();
+
+  propList.unlock(0, SHARED_ALL_PROCESS_LOCK);
 }
 
 template <typename T>
@@ -177,44 +178,27 @@ T NodeProperty<T>::getValue(int node_id, bool check_concurrency)
 template <typename T>
 void NodeProperty<T>::setValue(int node_id, T value, bool check_concurrency)
 {
-
   int owner_proc = graph->get_node_owner(node_id);
   int local_node_id = graph->get_node_local_index(node_id);
 
-  bool no_checks_needed = !check_concurrency;
-  /*
-   if (already_locked_processors_shared[owner_proc] == false) {
-     propList.get_lock(owner_proc,SHARED_LOCK,  no_checks_needed);
-     already_locked_processors_shared[owner_proc]=true ;
-   }*/
-  propList.get_lock(owner_proc, SHARED_LOCK, no_checks_needed);
-  propList.put_data(owner_proc, &value, local_node_id, 1, SHARED_LOCK);
-  propList.unlock(owner_proc, SHARED_LOCK);
-  /*
-  //if(owner_proc==world.rank())
-  //{
-  //  if(!already_locked_processors[owner_proc])
-  //    propList.get_lock(owner_proc,SHARED_LOCK,  no_checks_needed);
-  //  propList.data[local_node_id] = value;
-  //  if(!already_locked_processors[owner_proc])
-  //    propList.unlock(owner_proc, SHARED_LOCK);
-  //}
-  //else
-  //{
-    if(!already_locked_processors[owner_proc])
-      propList.get_lock(owner_proc,EXCLUSIVE_LOCK,  no_checks_needed);
-//else
-  //propList.flush (owner_proc) ;
-    propList.put_data(owner_proc,&value, local_node_id, 1, SHARED_LOCK);
-// propList.flush (owner_proc) ;
-    if(!already_locked_processors[owner_proc])
-      propList.unlock(owner_proc, EXCLUSIVE_LOCK);
-//else
-  //propList.flush (owner_proc) ;
-  //}
-*/
+  if (!write_buffer_ready)
+  {
+    write_buffer.resize(world.size());
+    for (int i = 0; i < world.size(); i++)
+    {
+      write_buffer[i].resize(length);
+    }
+    write_buffer_ready = true;
+  }
 
-  return;
+  if (atomic_add_buffer_ready)
+  {
+    atomic_add_buffer[owner_proc][local_node_id] = 0;
+    atomic_add_change_log.erase({owner_proc, local_node_id});
+  }
+
+  write_buffer[owner_proc][local_node_id] = value;
+  write_change_log.insert({owner_proc, local_node_id});
 }
 
 template <typename T>
@@ -403,19 +387,29 @@ void NodeProperty<T>::atomicAdd(int node_id, T value)
   int owner_proc = graph->get_node_owner(node_id);
   int local_node_id = graph->get_node_local_index(node_id);
 
-  // sync_later[node_id].push_back ({owner_proc, local_node_id, value}) ;
+  if (!atomic_add_buffer_ready)
+  {
+    atomic_add_buffer.resize(world.size());
+    for (int i = 0; i < world.size(); i++)
+    {
+      atomic_add_buffer[i].resize(length);
+    }
+    atomic_add_buffer_ready = true;
+  }
+  atomic_add_buffer[owner_proc][local_node_id] += value;
+  atomic_add_change_log.insert({owner_proc, local_node_id});
+}
 
-  /* Barenya ==> attempting an optimisation
-   */
-
-  /* if(!already_locked_processors_shared[owner_proc]) {
-     already_locked_processors_shared[owner_proc]=true ;
-     propList.get_lock(owner_proc,SHARED_LOCK);
-   }*/
-  propList.get_lock(owner_proc, SHARED_LOCK);
-  propList.accumulate(owner_proc, &value, local_node_id, 1, MPI_SUM, SHARED_LOCK);
-  // if(!already_locked_processors_shared[owner_proc])
-  propList.unlock(owner_proc, SHARED_LOCK);
+// Template specializations for bool type since MPI doesn't support MPI_SUM for bool
+template <>
+void NodeProperty<bool>::atomicAdd(int node_id, bool value)
+{
+  // Can't accumulate bools
+}
+template <>
+void NodeProperty<bool>::syncAtomicAddsAndWrites()
+{
+  // TODO: Implement this
 }
 
 template class NodeProperty<int>;

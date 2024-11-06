@@ -423,6 +423,7 @@ void EdgeProperty<T>::initialize_reduction_queue()
 {
   /* reduction_queue.clear();
    reduction_queue.resize(world.size());*/
+  return;
 }
 
 template <typename T>
@@ -470,6 +471,7 @@ std::vector<std::vector<int32_t>> EdgeProperty<T>::perform_reduction(MPI_Op op)
   }
   boost::mpi::all_to_all(world, modified_ids, modified_ids);
   return modified_ids;*/
+  return std::vector<std::vector<int32_t>>();
 }
 
 template <typename T>
@@ -493,6 +495,7 @@ void EdgeProperty<T>::assign_reduction_values(std::vector<std::vector<int32_t>> 
       propList.data[graph->get_edge_local_index(pair.first)] = pair.second;
   }
   propList.unlock(world.rank(),EXCLUSIVE_LOCK);*/
+  return;
 }
 
 template <typename T>
