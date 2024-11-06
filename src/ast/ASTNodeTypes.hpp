@@ -658,6 +658,8 @@ private:
   list<argument *> sizeExprList;
   Type *innerTypeSize;
   Type *outerTargetType;
+  Identifier* id;
+  int num;
 
 public:
   Type()
@@ -667,6 +669,8 @@ public:
     innerTargetType = NULL;
     sourceGraph = NULL;
     outerTargetType = NULL;
+    id = NULL;
+    num = -1;
   }
 
   static Type *createForPrimitive(int typeIdSent, int rootTypeSent)
@@ -740,6 +744,7 @@ public:
 
     return type;
   }
+
 
   static Type *createForNodeMapType(int typeIdSent, Type *innerType)
   {
@@ -869,6 +874,11 @@ public:
     return check_isEdgeType(typeId);
   }
 
+  bool isInitializeType()
+  {
+    return (id != NULL);
+  }
+
   void addSourceGraph(ASTNode *id)
   {
     sourceGraph = (Identifier *)id;
@@ -910,6 +920,16 @@ public:
   {
 
     return sizeExprList;
+  }
+
+  Identifier* getId()
+  {
+    return id;
+  }
+
+  int getVal()
+  {
+    return num;
   }
 
   Type *getOuterTargetType()
