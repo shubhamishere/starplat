@@ -108,7 +108,12 @@ namespace sphip {
 
         // TODO: Add function to increment indentation
 
-        targetFile.pushString("void");
+        if(func->containsReturn()){
+            targetFile.pushString("auto");
+        }
+        else{
+            targetFile.pushString("void");
+        }
         targetFile.AddSpace();
         std::cout << func->getIdentifier()->getIdentifier() << std::endl;
         targetFile.pushString(func->getIdentifier()->getIdentifier());
@@ -128,7 +133,7 @@ namespace sphip {
             arg_currNo++;
             argumentTotal--;
             Type *type = (*itr)->getType();
-            targetFile.pushString(ConvertToCppType(type)); // TODO: add function in header and impl
+            targetFile.pushString(ConvertToCppType(type, false, true)); // TODO: add function in header and impl
             targetFile.AddSpace();
 
             char* parName = (*itr)->getIdentifier()->getIdentifier();
@@ -167,8 +172,8 @@ namespace sphip {
                     char strBuffer[1024];
 
                     std::sprintf(strBuffer, "__device__ %s %s ;", ConvertToCppType(type).c_str(), parName);
-                    targetFile.pushString(strBuffer);
-                    targetFile.NewLine();
+                    // targetFile.pushString(strBuffer);
+                    // targetFile.NewLine();
                 }
             }
         }
@@ -212,86 +217,6 @@ namespace sphip {
 
     Function* DslCppGenerator::GetCurrentFunction() {
         return this->function;
-    }
-
-    std::string DslCppGenerator::ConvertToCppType(Type *type) {
-
-        if (type->isPrimitiveType()) {
-
-            int typeId = type->gettypeId();
-            switch (typeId) {
-                case TYPE_INT:
-                    return "int";
-                case TYPE_BOOL:
-                    return "bool";
-                case TYPE_LONG:
-                    return "long";
-                case TYPE_FLOAT:
-                    return "float";
-                case TYPE_DOUBLE:
-                    return "double";
-                case TYPE_NODE:
-                    return "int";
-                case TYPE_EDGE:
-                    return "int";
-                default:
-                    assert(false);
-            }
-        } else if (type->isPropType()) {
-
-            Type* targetType = type->getInnerTargetType();
-            if (targetType->isPrimitiveType()) {
-                int typeId = targetType->gettypeId();
-                switch (typeId) {
-                    case TYPE_INT:
-                        return "int*";
-                    case TYPE_BOOL:
-                        return "bool*";
-                    case TYPE_LONG:
-                        return "long*";
-                    case TYPE_FLOAT:
-                        return "float*";
-                    case TYPE_DOUBLE:
-                        return "double*";
-                    default:
-                        assert(false);
-                }
-            }
-        } else if (type->isNodeEdgeType()) {
-            return "int";  // need to be modified.
-
-        } else if (type->isGraphType()) {
-            return "graph&";
-        } else if (type->isCollectionType()) {
-            int typeId = type->gettypeId();
-
-            switch (typeId) {
-                case TYPE_SETN:
-                    return "std::set<int>&";
-
-                case TYPE_CONTAINER:
-                    {
-                    char* newS = new char[1024];
-                    string vecString = "std::vector<";   
-
-                    char* valType = (char*)convertToCppType(type->getInnerTargetType());
-                    string innerString = valType;
-                    vecString = vecString + innerString;
-                    vecString = vecString + ">";
-
-                    vecString = innerString + "*";
-
-                    copy(vecString.begin(), vecString.end(), newS);
-                    newS[vecString.size()] = '\0';
-                    return newS; 
-
-                    }
-                default:
-                    assert(false);
-            }
-        }
-
-        return "NA";
     }
 
     void DslCppGenerator::GenerateCsrArrays(const std::string &graphId, Function *func) {
@@ -489,7 +414,7 @@ namespace sphip {
         main.NewLine();
     }
 
-    const char* DslCppGenerator::convertToCppType(Type* type) {
+    std::string DslCppGenerator::ConvertToCppType(Type* type, bool isMemcpy, bool isParameter) {
         if (type->isPrimitiveType()) {
             int typeId = type->gettypeId();
             switch (typeId) {
@@ -547,12 +472,14 @@ namespace sphip {
                 char* newS = new char[1024];
                 string vecString = "std::vector<";   
 
-                char* valType = (char*)convertToCppType(type->getInnerTargetType());
+                string valType = ConvertToCppType(type->getInnerTargetType());
                 string innerString = valType;
                 vecString = vecString + innerString;
                 vecString = vecString + ">";
 
-                vecString = innerString + "*";
+                if(isMemcpy){ vecString = innerString + "*";}
+
+                if(isParameter) {vecString = vecString + "&";}
 
                 copy(vecString.begin(), vecString.end(), newS);
                 newS[vecString.size()] = '\0';
@@ -628,7 +555,7 @@ namespace sphip {
 
             if (isMainFile == true) {
                 std::sprintf(strBuffer, "__device__ %s %s; ", varType, varName);
-                header.pushString(strBuffer);
+                // header.pushString(strBuffer);
                 declInHeader = true;
             }
             /// REPLICATE ON HOST AND DEVICE
@@ -657,7 +584,8 @@ namespace sphip {
          {
            if(type->gettypeId() == TYPE_UPDATES)
              {
-                main.pushstr_space(convertToCppType(type));
+                main.pushString(ConvertToCppType(type));
+                main.push(' ');
                 main.pushString(stmt->getdeclId()->getIdentifier());
                 if(stmt->isInitialized())
                    {
@@ -673,14 +601,22 @@ namespace sphip {
              }
             if(type->gettypeId() == TYPE_NODEMAP){
                
-                main.pushstr_space(convertToCppType(type));
+                main.pushString(ConvertToCppType(type));
+                main.push(' ');
                 main.pushString(stmt->getdeclId()->getIdentifier());
                 main.pushstr_newL(";");
            }
            if(type->gettypeId() == TYPE_CONTAINER){
              
-              main.pushstr_space(convertToCppType(type));
+              main.pushString(ConvertToCppType(type));
+              main.push(' ');
               main.pushString(stmt->getdeclId()->getIdentifier());
+
+              if(type->isInitializeType()){
+                string temp = "";
+                temp = temp + "(" + std::string(type->getId()->getIdentifier()) + ", " + to_string(type->getVal()) + ")";
+                main.pushString(temp);
+              }
 
               if(type->getArgList().size() !=0){
                  
@@ -704,14 +640,14 @@ namespace sphip {
 
               if(stmt->getdeclId()->getSymbolInfo()->getId()->isLocalMapReq()){
 
-                //  main.pushString("std::vector<");
-                 main.pushString(convertToCppType(type));
-                 main.pushstr_space("*");
+                 main.pushString("std::vector<");
+                 main.pushString(ConvertToCppType(type));
+                 main.pushstr_space(">");
 
                  main.pushString(stmt->getdeclId()->getIdentifier());
                  main.pushString("_local");
                  main.pushString("(omp_get_max_threads() , ");
-                 main.pushString(convertToCppType(type));
+                 main.pushString(ConvertToCppType(type));
                  
                  if(type->getArgList().size() !=0){
                  
@@ -805,7 +741,7 @@ namespace sphip {
         if (stmt->lhs_isIdentifier()) {
             Identifier* id = stmt->getId();
             Expression* exprAssigned = stmt->getExpr();
-            std::cout<<"LHS ID "<<stmt->hasPropCopy()<<endl;
+            std::cout<<"LHS ID "<<stmt->hasPropCopy()<<" "<<id->getIdentifier()<<endl;
             if (stmt->hasPropCopy())  // prop_copy is of the form (propId = propId)
             {
                 char strBuffer[1024];
@@ -817,7 +753,9 @@ namespace sphip {
                 targetFile.pushString(strBuffer);
                 targetFile.pushstr_newL(";");
             } else
+            {
                 targetFile.pushString(id->getIdentifier());
+            }
         }
          else if (stmt->lhs_isProp()){  // the check for node and edge property to be carried out.
             std::cout<<"LHS PROP "<<endl;
@@ -868,7 +806,7 @@ namespace sphip {
         dslCodePad& targetFile = isMainFile ? main : header;
         Expression* condition = stmt->getCondition();
 
-        targetFile.pushString("if (");
+        targetFile.pushString("\nif (");
         GenerateExpression(condition, isMainFile);
         targetFile.pushStringWithNewLine(") {");
         GenerateStatement(stmt->getIfBody(), isMainFile);
@@ -934,49 +872,54 @@ namespace sphip {
                     GenerateHipMemCpySymbol(iden->getIdentifier(), ConvertToCppType(type), true);
                 else if(type->isCollectionType()){
                     std::cout<<"COLLECTION TYPE\n";
-                    string memcpy = ConvertToCppType(type) + " d_" + iden->getIdentifier() + " = (" + ConvertToCppType(type) + ")memset(sizeof(int) * " + iden->getIdentifier() + ".size());\n";
-                    memcpy = memcpy + "hipMemcpyToSymbol(" + "d_" + string(iden->getIdentifier())
-                    + ", &" + string(iden->getIdentifier()) + ", " + "sizeof(" + ConvertToCppType(type)  
-                    + "), 0, hipMemcpyHostToDevice);\n";
+                    string memcpy = "";
+                    memcpy = memcpy + ConvertToCppType(type, true) + " d_" + iden->getIdentifier() + to_string(loopNum) + ";\n";
+                    memcpy = memcpy + "hipMalloc(" + "&d_" + iden->getIdentifier() + to_string(loopNum) + ", sizeof(" + ConvertToCppType(type->getInnerTargetType()) +  ") * " + iden->getIdentifier() + ".size());\n";
+                    memcpy = memcpy + "hipMemcpy(" + "d_" + string(iden->getIdentifier()) + to_string(loopNum) + 
+                    + ", " + string(iden->getIdentifier()) + ".data(), " + string(iden->getIdentifier()) + ".size() * sizeof(" + ConvertToCppType(type->getInnerTargetType())  
+                    + "), hipMemcpyHostToDevice);\n";
                     targetFile.pushString(memcpy);
                 }
             }
             
 
-            GenerateLaunchConfiguration();
-            
-            main.pushString(GetCurrentFunction()->getIdentifier()->getIdentifier());
+            GenerateLaunchConfiguration(stmt, loopNum, isMainFile);
+
+            targetFile.pushString(GetCurrentFunction()->getIdentifier()->getIdentifier());
             std::string temp = "_kernel" + to_string(loopNum);
-            main.pushString(temp);
-            loopNum++;
-            main.pushString("<<<numBlocks, threadsPerBlock>>>(V, E");
+            targetFile.pushString(temp);
+            targetFile.pushString("<<<numBlocks" + to_string(loopNum) + ", threadsPerBlock" + to_string(loopNum) + ">>>(V" + to_string(loopNum));
             if(stmt->getIsMetaUsed())
-                main.pushString(", dOffsetArray");
+                targetFile.pushString(", dOffsetArray");
             if(stmt->getIsDataUsed())
-                main.pushString(", dEdgelist");
+                targetFile.pushString(", dEdgelist");
             if(stmt->getIsSrcUsed())
-                main.pushString(", dSrcList");
+                targetFile.pushString(", dSrcList");
             if(stmt->getIsWeightUsed())
-                main.pushString(", dWeight");
+                targetFile.pushString(", dWeight");
             if(stmt->getIsRevMetaUsed())                                   // if d_rev_meta is used, i.e. nodes_to is called
-                main.pushString(",dRevOffsetArray");
+                targetFile.pushString(",dRevOffsetArray");
 
             for (Identifier* iden : vars) {
                 Type* type = iden->getSymbolInfo()->getType();
                 if (type->isPropType()) {
                     std::string parameterName = CapitalizeFirstLetter(std::string(iden->getIdentifier()));
                     parameterName = ", d" + parameterName;
-                    main.pushString(/*createParamName(*/ parameterName);
+                    targetFile.pushString(/*createParamName(*/ parameterName);
+                }
+                else if(type->isPrimitiveType()){
+                    string parameterName = ", " + std::string(iden->getIdentifier());
+                    targetFile.pushString(parameterName);
                 }
                 else if(type->isCollectionType()){
-                    string parameterName = ", d_" + std::string(iden->getIdentifier());
-                    main.pushString(parameterName);
+                    string parameterName = ", d_" + std::string(iden->getIdentifier()) + to_string(loopNum);
+                    targetFile.pushString(parameterName);
                 }
             }
-            main.pushString(")");
-            main.pushStringWithNewLine(";");
+            targetFile.pushString(")");
+            targetFile.pushStringWithNewLine(";");
 
-            main.pushStringWithNewLine("hipDeviceSynchronize();");
+            targetFile.pushStringWithNewLine("hipDeviceSynchronize();");
 
             for (Identifier* iden : vars) {
                 Type* type = iden->getSymbolInfo()->getType();
@@ -984,11 +927,14 @@ namespace sphip {
                     GenerateHipMemCpySymbol(iden->getIdentifier(), ConvertToCppType(type), false);
                 else if(type->isCollectionType()){
                     string memcpy = "";
-                    memcpy = memcpy + "hipMemcpyToSymbol(" + "&" + string(iden->getIdentifier()) + ", " + "d_" + string(iden->getIdentifier()) + ", sizeof(" + ConvertToCppType(type)  
-                    + "), 0, hipMemcpyDeviceToHost);\n";
+                    memcpy = memcpy + "hipMemcpy(" + string(iden->getIdentifier()) + ".data(), " + "d_" + string(iden->getIdentifier()) + to_string(loopNum) + ", " + string(iden->getIdentifier()) + ".size() * sizeof(" + ConvertToCppType(type->getInnerTargetType())  
+                    + "), hipMemcpyDeviceToHost);\n";
+                    memcpy = memcpy + "hipFree(d_" + string(iden->getIdentifier()) + to_string(loopNum) + ");\n";
                     targetFile.pushString(memcpy);
                 }
             }
+
+            loopNum++;
 
             GenerateHipKernel(stmt);
 
@@ -1547,6 +1493,12 @@ namespace sphip {
             }
 
         }
+        else{
+            sprintf(strBuffer, "%s[", mapExprId->getIdentifier());
+            targetFile.pushString(strBuffer);
+            GenerateExpression(indexExpr, isMainFile);
+            targetFile.pushString("]");
+        }
 
     }
 
@@ -2082,7 +2034,7 @@ namespace sphip {
         header.pushString(temp);
         kernelNum++;
 
-        header.pushString("(int V, int E");
+        header.pushString("(int V");
         if(stmt->getIsMetaUsed())
             header.pushString(", int* dOffsetArray");
         if(stmt->getIsDataUsed())
@@ -2107,7 +2059,12 @@ namespace sphip {
             }
             else if(type->isCollectionType()){
                 string parameter = "";
-                parameter = parameter + ", " + ConvertToCppType(type).c_str() + " " + iden->getIdentifier();
+                parameter = parameter + ", " + ConvertToCppType(type, true).c_str() + " " + iden->getIdentifier();
+                header.pushString(parameter);
+            }
+            else if(type->isPrimitiveType()){
+                string parameter = "";
+                parameter = parameter + ", " + ConvertToCppType(type, false, true).c_str() + " " + iden->getIdentifier();
                 header.pushString(parameter);
             }
         }
