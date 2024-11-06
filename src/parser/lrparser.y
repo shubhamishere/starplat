@@ -263,7 +263,7 @@ collections : T_LIST { $$=Util::createCollectionTypeNode(TYPE_LIST,NULL);};
 container : T_CONTAINER '<' type '>' '(' arg_list ',' type ')' {$$ = Util::createContainerTypeNode(TYPE_CONTAINER, $3, $6->AList, $8);}
           | T_CONTAINER '<' type '>' '(' arg_list ')' { $$ =  Util::createContainerTypeNode(TYPE_CONTAINER, $3, $6->AList, NULL);}
           | T_CONTAINER '<' type '>' { list<argument*> argList;
-			                          $$ = Util::createContainerTypeNode(TYPE_CONTAINER, $3, argList, NULL);}		
+			                          $$ = Util::createContainerTypeNode(TYPE_CONTAINER, $3, argList, NULL);}	
 
 vector: T_VECTOR'<' type '>' '(' arg_list ',' type ')' {$$ = Util::createContainerTypeNode(TYPE_VECTOR, $3, $6->AList, $8);}
           | T_VECTOR'<' type '>' '(' arg_list ')' { $$ =  Util::createContainerTypeNode(TYPE_VECTOR, $3, $6->AList, NULL);}

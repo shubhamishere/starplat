@@ -114,11 +114,10 @@ namespace sphip {
          * Generation Functions
          */
 
-
-        const char* convertToCppType(Type* type);
         void generate_exprIndex(Expression* expr, bool isLocal, bool isMainFile);
         string getProcName(proc_callExpr* proc);
         void generateArgList(list<argument*> argList, bool addBraces, bool isMainFile);
+        void GenerateLaunchConfiguration(forallStmt* stmt, int loopNum, bool isMainFile);
 
         /**
          * TODO
@@ -160,7 +159,7 @@ namespace sphip {
         /**
          * TODO
          */
-        std::string ConvertToCppType(Type* type);
+        std::string ConvertToCppType(Type* type, bool isMemcpy = false, bool isParameter = false);
 
         /**
          * TODO

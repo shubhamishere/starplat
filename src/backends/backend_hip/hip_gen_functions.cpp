@@ -47,17 +47,34 @@ namespace sphip {
         std::ostringstream oss;
 
         if(isHostToDevice) {
-            oss << "hipMemcpyToSymbol(::" << var
+            oss << typeStr << "* d_" << var << ";\n"; 
+            oss << "hipMemcpyToSymbol(d_" << var
             << ", &" << var << ", " << "sizeof(" << typeStr  
             << "), 0, hipMemcpyHostToDevice);";
         }
         else {
             oss << "hipMemcpyFromSymbol(&" << var
-            << ", ::" << var << ", " << "sizeof(" << typeStr  
+            << ", d_" << var << ", " << "sizeof(" << typeStr  
             << "), 0, hipMemcpyDeviceToHost);";
         }
 
-        main.pushStringWithNewLine(oss.str());
+        // main.pushStringWithNewLine(oss.str());
+    }
+
+    void DslCppGenerator::GenerateLaunchConfiguration(forallStmt* stmt, int loopNum, bool isMainFile) {
+        
+        dslCodePad & targetFile = (isMainFile ? main : header);
+        if(!stmt->isSourceField()){
+            targetFile.NewLine();
+            targetFile.pushStringWithNewLine("int V" + to_string(loopNum) + " = " + std::string(stmt->getSource()->getIdentifier()) + ".size();");
+            targetFile.pushStringWithNewLine("const unsigned threadsPerBlock" + to_string(loopNum) + " = 32;"
+            );
+            targetFile.pushStringWithNewLine(
+                "const unsigned numBlocks" + to_string(loopNum) + " = (V" + to_string(loopNum) + " + threadsPerBlock" + to_string(loopNum) + " - 1) / threadsPerBlock" + to_string(loopNum) + ";"
+            );
+
+            targetFile.NewLine();
+        }
     }
 
     void DslCppGenerator::GenerateLaunchConfiguration() {

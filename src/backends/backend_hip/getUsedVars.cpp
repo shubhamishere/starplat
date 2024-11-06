@@ -90,7 +90,8 @@ usedVariables GetVarsAssignment(assignment *stmt)
 
     Identifier* mapExprId = mapExpr->getId();
     currVars.addVariable(mapExprId, READ);
-    currVars.addVariable(indexExprId, READ);
+    currVars.merge(GetVarsExpr(indexExpr));
+    // currVars.addVariable(indexExprId, READ);
   }
 
   usedVariables exprVars = GetVarsExpr(stmt->getExpr());
@@ -253,7 +254,7 @@ usedVariables getVarsBFS(iterateBFS *stmt)
 
 usedVariables GetVarsForAll(forallStmt *stmt)
 {
-  std::cout<<"ENTER GET VARS\n";
+  std::cout<<"\nENTER GET VARS\n"<<stmt->getIterator()->getIdentifier()<<" "<<stmt->getSource()->getIdentifier()<<"\n";
   usedVariables currVars = GetVarsStatement(stmt->getBody());
   currVars.removeVariable(stmt->getIterator(), READ_WRITE);
 
@@ -267,7 +268,11 @@ usedVariables GetVarsForAll(forallStmt *stmt)
   }
   else if(!stmt->isSourceField())
   {
+      std::cout<<"NOT SOURCE FIELD\n";
       Identifier *iden = stmt->getSource();
+      // if(currVars.isUsedVariable(iden)){
+      //   currVars.addVariable(iden, READ);
+      // }
       currVars.addVariable(iden, READ);
   }
   else
