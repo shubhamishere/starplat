@@ -713,7 +713,7 @@ void dsl_cpp_generator::generatePropertyDefination(Type* type,char* Id)
   Type* targetType=type->getInnerTargetType();
   vector<Identifier*> graphIds = graphId[curFuncType][curFuncCount()];
   printf("currentFuncType %d\n",curFuncType);
-  printf("currentFuncCount %d graphIds[0] %d\n",curFuncCount(), graphIds.size());
+  printf("currentFuncCount %d graphIds[0] %ld\n",curFuncCount(), graphIds.size());
 
   if(targetType->gettypeId()==TYPE_INT)
   {
