@@ -507,8 +507,8 @@ int main(int argc,char **argv)
 {
   
   if(argc<4){
-    std::cout<< "Usage: " << argv[0] << " [-s|-d] -f <dsl.sp> -b [cuda|omp|mpi|acc|multigpu|amd|hip] " << '\n';
-    std::cout<< "E.g. : " << argv[0] << " -s -f ../graphcode/sssp_dslV2 -b omp " << '\n';
+    std::cout<< "Usage: " << argv[0] << " [-s|-d] -f <dsl.sp> -b [cuda|omp|mpi|acc|multigpu|amd|hip|sycl] " << '\n';
+    std::cout<< "E.g. : " << argv[0] << " -s -f ../graphcode/staticDSLCodes/sssp_dslV3 -b omp " << '\n';
     exit(-1);
   }
   
