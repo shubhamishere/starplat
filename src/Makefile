@@ -9,7 +9,7 @@ A_PROGRAM = bin/attachPropAnalyser.o bin/dataRaceAnalyser.o bin/deviceVarsAnalys
 CFLAGS  = -g 
 CC = g++ -std=c++11 #-Wall # -Wno-unused-variable #-fsanitize=address
 
-all: starplat
+all: backendsdir starplat
 
 #~ openACC: generator_openACC starplat_openACC clean
 
@@ -89,9 +89,18 @@ bin/om_dyn_dsl_cpp_generator.o: backends/backend_omp/dsl_dyn_cpp_generator.cpp b
 	$(CC) $(CFLAGS) -c backends/backend_omp/dsl_dyn_cpp_generator.cpp -o bin/om_dyn_dsl_cpp_generator.o
 
 
-starplat: bin $(PROGRAMS) $(A_PROGRAM) 
-	$(CC)  $(PROGRAMS) $(A_PROGRAM) -o StarPlat
+backendsdir:
+	mkdir -p bin
+	mkdir -p ../graphcode/generated_omp/
+	mkdir -p ../graphcode/generated_mpi/
+	mkdir -p ../graphcode/generated_cuda/
+	mkdir -p ../graphcode/generated_openacc/
+	mkdir -p ../graphcode/generated_hip/
+	mkdir -p ../graphcode/generated_sycl/
+	mkdir -p ../graphcode/generated_opencl/
 
+starplat: $(PROGRAMS) $(A_PROGRAM)
+	$(CC)  $(PROGRAMS) $(A_PROGRAM) -o StarPlat
 
 #~ bin/SymbolTableBuilder.o: symbolutil/SymbolTableBuilder.cpp
 #~ 	$(CC) -c symbolutil/SymbolTableBuilder.cpp -o bin/SymbolTableBuilder.o
@@ -174,13 +183,10 @@ bin/y.tab.o: parser/lexer.l parser/lrparser.y
 bin/lex.yy.o: parser/lexer.l parser/lrparser.y
 	$(MAKE) -C parser
 
-bin:
-	mkdir -p bin
-
 clean_windows:
 	rm -f $(EXPENDABLES_WINDOWS)
 
 clean:
 #~ 	rm -f $(EXPENDABLES)
-	rm bin/*.o StarPlat
-	rmdir bin
+	rm -rf bin StarPlat
+	rm -rf ../graphcode/generated_omp ../graphcode/generated_cuda ../graphcode/generated_mpi ../graphcode/generated_hip ../graphcode/generated_sycl ../graphcode/generated_openacc ../graphcode/generated_opencl
