@@ -97,7 +97,9 @@ backendsdir:
 	mkdir -p ../graphcode/generated_openacc/
 	mkdir -p ../graphcode/generated_hip/
 	mkdir -p ../graphcode/generated_sycl/
-	mkdir -p ../graphcode/generated_opencl/
+	mkdir -p ../graphcode/generated_amd/
+	mkdir -p ../graphcode/generated_multigpu/
+
 
 starplat: $(PROGRAMS) $(A_PROGRAM)
 	$(CC)  $(PROGRAMS) $(A_PROGRAM) -o StarPlat
@@ -189,4 +191,4 @@ clean_windows:
 clean:
 #~ 	rm -f $(EXPENDABLES)
 	rm -rf bin StarPlat
-	rm -rf ../graphcode/generated_omp ../graphcode/generated_cuda ../graphcode/generated_mpi ../graphcode/generated_hip ../graphcode/generated_sycl ../graphcode/generated_openacc ../graphcode/generated_opencl
+	rm -rf ../graphcode/generated_omp ../graphcode/generated_cuda ../graphcode/generated_mpi ../graphcode/generated_hip ../graphcode/generated_sycl ../graphcode/generated_openacc ../graphcode/generated_amd ../graphcode/generated_multigpu
