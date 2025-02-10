@@ -121,10 +121,10 @@ void dsl_cpp_generator::generation_begin() {
   addIncludeToFile("stdio.h", header, true);
   header.pushString("#include ");
   addIncludeToFile("stdlib.h", header, true);
-  header.pushString("#include ");
-  addIncludeToFile("ParallelHeapCudaClass.cu", header, false);
-  header.pushString("#include ");
-  addIncludeToFile("deepak_map_cuda.cu", header, false);
+  //header.pushString("#include ");
+  //addIncludeToFile("ParallelHeapCudaClass.cu", header, false);
+  //header.pushString("#include ");
+  //addIncludeToFile("deepak_map_cuda.cu", header, false);
   header.pushString("#include ");
   addIncludeToFile("limits.h", header, true);
   header.pushString("#include ");
@@ -132,7 +132,8 @@ void dsl_cpp_generator::generation_begin() {
   header.pushString("#include ");
   addIncludeToFile("../graph.hpp", header, false);
   header.pushString("#include ");
-  addIncludeToFile("../libcuda.cuh", header, false);
+  //addIncludeToFile("../libcuda.cuh", header, false);
+  addIncludeToFile("../dynamic_mst_delete_cuda/libcuda.cuh", header, false);
 
   header.pushstr_newL("#include <cooperative_groups.h>");
   //header.pushstr_newL("graph &g = NULL;");  //temporary fix - to fix the PageRank graph g instance
