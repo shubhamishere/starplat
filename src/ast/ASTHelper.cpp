@@ -210,6 +210,12 @@ public:
 
         return typeNode;
     }
+    static ASTNode *createPointTypeNode(int typeId)
+    {
+        Type *pointTypeNode = Type::createForPointType(typeId);
+        return pointTypeNode;
+    }
+
     static ASTNode *createGraphTypeNode(int typeId, Identifier *targetGraph)
     {
         Type *typeNode = Type::createForGraphType(typeId, 2, targetGraph);
