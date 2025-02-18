@@ -1856,13 +1856,29 @@ namespace sphip
             value = string("d") + id2->getIdentifier() + "Next[" + id1->getIdentifier() + "]";
         else
         {
-
             if (isMainFile)
-                value = id2->getIdentifier() + string("[") + id1->getIdentifier() + "]";
+            {
+                if (id1->getSymbolInfo()->getType()->isPointType())
+                {
+                    value = id1->getIdentifier() + string(".") + id2->getIdentifier();
+                }
+                else
+                {
+                    value = id2->getIdentifier() + string("[") + id1->getIdentifier() + "]";
+                }
+            }
             else
-                value = string("d") + CapitalizeFirstLetter(id2->getIdentifier()) + "[" + id1->getIdentifier() + "]";
+            {
+                if (id1->getSymbolInfo()->getType()->isPointType())
+                {
+                    value = id1->getIdentifier() + string(".") + id2->getIdentifier();
+                }
+                else
+                {
+                    value = string("d") + CapitalizeFirstLetter(id2->getIdentifier()) + "[" + id1->getIdentifier() + "]";
+                }
+            }
         }
-
         (isMainFile ? main : header).pushString(value);
     }
 
