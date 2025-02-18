@@ -542,6 +542,18 @@ namespace sphip
                 assert(false);
             }
         }
+        else if (type->isPointType())
+        {
+            std::cout << "Point Type\n";
+            if (isParameter)
+            {
+                return "Point&";
+            }
+            else
+            {
+                return "Point";
+            }
+        }
 
         return "NA";
     }
@@ -737,6 +749,18 @@ namespace sphip
                     targetFile.pushstr_newL(";");
                 }
             }
+        }
+        else if (type->isPointType())
+        {
+            targetFile.pushString(ConvertToCppType(type));
+            targetFile.push(' ');
+            targetFile.pushString(stmt->getdeclId()->getIdentifier());
+            if (stmt->isInitialized())
+            {
+                targetFile.pushString(" = ");
+                GenerateExpression(stmt->getExpressionAssigned(), isMainFile, false);
+            }
+            targetFile.pushstr_newL(";");
         }
     }
 
@@ -1642,7 +1666,7 @@ namespace sphip
     void DslCppGenerator::GenerateExpression(
         Expression *expr, bool isMainFile, bool isToUpper, bool isAtomic)
     {
-        dslCodePad& targetFile = isMainFile ? main : header;
+        dslCodePad &targetFile = isMainFile ? main : header;
         if (expr->isLiteral())
             GenerateExpressionLiteral(expr, isMainFile);
 
