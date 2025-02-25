@@ -1317,11 +1317,63 @@ namespace sphip
     {
         if (stmt->is_reducCall())
         {
-            // GenerateReductionCallStmt(stmt, isMainFile);
+            GenerateReductionCallStmt(stmt, isMainFile);
         }
         else
         {
             GenerateReductionOpStmt(stmt, isMainFile);
+        }
+    }
+
+    void DslCppGenerator::GenerateReductionCallStmt(reductionCallStmt *stmt, bool isMainFile)
+    {
+        // TODO: have handled only 'Min', 'Max' case here.
+        dslCodePad &targetFile = isMainFile ? main : header;
+        Identifier *id = stmt->getLeftId();
+        reductionCall *redCall = stmt->getReducCall();
+        
+        switch (redCall->getReductionType())
+        {
+        case REDUCE_MIN:
+            // TODO: supporting only 2 arguments for now.
+            targetFile.pushString(id->getIdentifier());
+            targetFile.pushString(" = ");
+            targetFile.pushString("min(");
+            for (auto &arg : redCall->getargList())
+            {
+                GenerateExpression(arg->getExpr(), isMainFile);
+                if (arg != redCall->getargList().back())
+                    targetFile.pushString(", ");
+            }
+            targetFile.pushString(");");
+            targetFile.pushstr_newL("");
+            break;
+        case REDUCE_MAX:
+            // TODO: supporting only 2 arguments for now.
+            targetFile.pushString(id->getIdentifier());
+            targetFile.pushString(" = ");
+            targetFile.pushString("max(");
+            for (auto &arg : redCall->getargList())
+            {
+                GenerateExpression(arg->getExpr(), isMainFile);
+                if (arg != redCall->getargList().back())
+                    targetFile.pushString(", ");
+            }
+            targetFile.pushString(");");
+            targetFile.pushstr_newL("");
+            break;
+        case REDUCE_SUM:
+            // TODO
+            break;
+        case REDUCE_COUNT:
+            // TODO
+            break;
+        case REDUCE_PRODUCT:
+            // TODO
+            break;
+        default:
+            std::cout << "Unknown reduction type\n";
+            break;
         }
     }
 

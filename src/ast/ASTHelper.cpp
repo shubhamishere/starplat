@@ -544,11 +544,11 @@ public:
         reductionCallStmt *reductionStmtNode;
         if (leftSide->getTypeofNode() == NODE_ID)
         {
-            reductionStmtNode = reductionCallStmt::id_reducCallStmt((Identifier *)leftSide, (reductionCall *)reductionStmtNode);
+            reductionStmtNode = reductionCallStmt::id_reducCallStmt((Identifier *)leftSide, (reductionCall *)reductionCallNode);
         }
         if (leftSide->getTypeofNode() == NODE_PROPACCESS)
         {
-            reductionStmtNode = reductionCallStmt::propId_reducCallStmt((PropAccess *)leftSide, (reductionCall *)reductionStmtNode);
+            reductionStmtNode = reductionCallStmt::propId_reducCallStmt((PropAccess *)leftSide, (reductionCall *)reductionCallNode);
         }
         return reductionStmtNode;
     }
