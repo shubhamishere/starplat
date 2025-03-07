@@ -73,6 +73,11 @@ public:
         return frontEndContext.getCurrentFuncType();
     }
 
+    static void setThrustUsed(bool thrustUsedFlag)
+    {
+        frontEndContext.setThrustUsed(thrustUsedFlag);
+    }
+
     static ASTNode *createFuncNode(ASTNode *id, list<formalParam *> formalParamList)
     {
         Identifier *funcId = (Identifier *)id;

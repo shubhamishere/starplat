@@ -291,7 +291,20 @@ auto grahamScanConvexHull(
 
 
   int group_size = (n + k - 1) / k;  
-  sort(points.begin(),points.end(),xComparator);
+  thrust::device_vector<Point> d_points = points;
+  thrust::sort(d_points.begin(), d_points.end(), [] __host__ __device__(Point& a, Point& b){
+
+    if (a.x != b.x) {
+      return a.x < b.x;
+
+
+    }  else {
+      return a.y < b.y;
+
+
+    }
+  });
+  thrust::copy(d_points.begin(), d_points.end(), points.begin());
 
   std::vector<int> L(k);
   std::vector<int> stackArr(n, 0);
@@ -308,33 +321,33 @@ auto grahamScanConvexHull(
   hipDeviceSynchronize();
   hipMemcpy(L.data(), d_L0, L.size() * sizeof(int), hipMemcpyDeviceToHost);
   hipFree(d_L0);
-  int* d_stackSize1;
-  hipMalloc(&d_stackSize1, sizeof(int) * stackSize.size());
-  hipMemcpy(d_stackSize1, stackSize.data(), stackSize.size() * sizeof(int), hipMemcpyHostToDevice);
-  int* d_stackArr1;
-  hipMalloc(&d_stackArr1, sizeof(int) * stackArr.size());
-  hipMemcpy(d_stackArr1, stackArr.data(), stackArr.size() * sizeof(int), hipMemcpyHostToDevice);
   int* d_L1;
   hipMalloc(&d_L1, sizeof(int) * L.size());
   hipMemcpy(d_L1, L.data(), L.size() * sizeof(int), hipMemcpyHostToDevice);
   Point* d_points1;
   hipMalloc(&d_points1, sizeof(Point) * points.size());
   hipMemcpy(d_points1, points.data(), points.size() * sizeof(Point), hipMemcpyHostToDevice);
+  int* d_stackSize1;
+  hipMalloc(&d_stackSize1, sizeof(int) * stackSize.size());
+  hipMemcpy(d_stackSize1, stackSize.data(), stackSize.size() * sizeof(int), hipMemcpyHostToDevice);
+  int* d_stackArr1;
+  hipMalloc(&d_stackArr1, sizeof(int) * stackArr.size());
+  hipMemcpy(d_stackArr1, stackArr.data(), stackArr.size() * sizeof(int), hipMemcpyHostToDevice);
 
   int V1 = L.size();
   const unsigned threadsPerBlock1 = 32;
   const unsigned numBlocks1 = (V1 + threadsPerBlock1 - 1) / threadsPerBlock1;
 
-  grahamScanConvexHull_kernel1<<<numBlocks1, threadsPerBlock1>>>(V1, d_stackSize1, d_stackArr1, d_L1, d_points1, n, group_size);
+  grahamScanConvexHull_kernel1<<<numBlocks1, threadsPerBlock1>>>(V1, d_L1, d_points1, d_stackSize1, d_stackArr1, n, group_size);
   hipDeviceSynchronize();
-  hipMemcpy(stackSize.data(), d_stackSize1, stackSize.size() * sizeof(int), hipMemcpyDeviceToHost);
-  hipFree(d_stackSize1);
-  hipMemcpy(stackArr.data(), d_stackArr1, stackArr.size() * sizeof(int), hipMemcpyDeviceToHost);
-  hipFree(d_stackArr1);
   hipMemcpy(L.data(), d_L1, L.size() * sizeof(int), hipMemcpyDeviceToHost);
   hipFree(d_L1);
   hipMemcpy(points.data(), d_points1, points.size() * sizeof(Point), hipMemcpyDeviceToHost);
   hipFree(d_points1);
+  hipMemcpy(stackSize.data(), d_stackSize1, stackSize.size() * sizeof(int), hipMemcpyDeviceToHost);
+  hipFree(d_stackSize1);
+  hipMemcpy(stackArr.data(), d_stackArr1, stackArr.size() * sizeof(int), hipMemcpyDeviceToHost);
+  hipFree(d_stackArr1);
 
 
 

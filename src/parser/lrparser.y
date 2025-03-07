@@ -328,7 +328,13 @@ unary_expr :   expression T_INC_OP {$$=Util::createNodeForUnaryExpr($1,OPERATOR_
 			 |  expression T_DEC_OP {$$=Util::createNodeForUnaryExpr($1,OPERATOR_DEC);}; 			 
 
 proc_call : leftSide '(' arg_list ')' { 
-                                       
+										ASTNode* proc_callId = $1;
+										if(proc_callId->getTypeofNode()==NODE_ID){
+											Identifier* id = (Identifier*)proc_callId;
+											if(strcmp(id->getIdentifier(),"tsort")==0){
+												frontEndContext.setThrustUsed(true);
+											}
+										}
                                        $$ = Util::createNodeForProcCall($1,$3->AList,NULL); 
 
 									    };
