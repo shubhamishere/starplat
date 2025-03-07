@@ -74,6 +74,13 @@ namespace sphip
         header.addHeaderFile("hip/hip_runtime.h", true);
         header.addHeaderFile("hip/hip_cooperative_groups.h", true); // TODO
         header.addHeaderFile("../graph.hpp", false);
+
+        if (frontEndContext.getThrustUsed())
+        {
+            header.addHeaderFile("thrust/sort.h", true);
+            header.addHeaderFile("thrust/device_vector.h", true);
+            header.addHeaderFile("thrust/copy.h", true);
+        }
         header.NewLine();
 
         main.addHeaderFile(this->fileName + ".h", false);
@@ -646,7 +653,7 @@ namespace sphip
                 GenerateExpression(stmt->getExpressionAssigned(), isMainFile); // PRINTS RHS? YES
             }
 
-            targetFile.pushString(";  ");
+            targetFile.pushStringWithNewLine(";  ");
 
             if (declInHeader)
             {
@@ -1331,7 +1338,7 @@ namespace sphip
         dslCodePad &targetFile = isMainFile ? main : header;
         Identifier *id = stmt->getLeftId();
         reductionCall *redCall = stmt->getReducCall();
-        
+
         switch (redCall->getReductionType())
         {
         case REDUCE_MIN:
@@ -1636,8 +1643,6 @@ namespace sphip
         string methodId = proc->getMethodId()->getIdentifier();
         string nodeCall = "attachNodeProperty";
         string edgeCall = "attachEdgeProperty";
-
-        std::cout << "HELLOO\n";
         if (methodId.compare(nodeCall) == 0)
         {
 
@@ -2008,9 +2013,67 @@ namespace sphip
         {
             targetFile.pushString("g.num_nodes()");
         }
+        else if (methodId == "tsort")
+        {
+            proc_callExpr *proc = expr;
+            char strBuffer[1024];
+            list<argument *> argList = proc->getArgList();
+            targetFile.pushString("thrust::device_vector");
+            targetFile.pushString("<");
+            Expression *expr1 = (*argList.begin())->getExpr();
+            proc_callExpr *exp1 = static_cast<proc_callExpr *>(expr1);
+            char *exp1Id = exp1->getId1()->getIdentifier();
+            Type *typ1 = exp1->getId1()->getSymbolInfo()->getType()->getInnerTargetType();
+            targetFile.pushString(ConvertToCppType(typ1));
+            targetFile.pushString(">");
+            sprintf(strBuffer, " d_%s = %s;\n", exp1Id, exp1Id);
+            targetFile.pushString(strBuffer);
+            sprintf(strBuffer, "thrust::sort(d_%s.begin(), d_%s.end()", exp1Id, exp1Id);
+            targetFile.pushString(strBuffer);
+            if (argList.size() == 3)
+            {
+                Expression *compareExpr = (*argList.rbegin())->getExpr();
+                Identifier *compareId = compareExpr->getId();
+                list<Function *> funcList = frontEndContext.getFuncList();
+                Function *compareFunc = NULL;
+                for (auto &func : funcList)
+                {
+                    if (strcmp(func->getIdentifier()->getIdentifier(), compareId->getIdentifier()) == 0)
+                    {
+                        compareFunc = func;
+                        break;
+                    }
+                }
+                targetFile.pushString(", ");
+                targetFile.pushString("[] __host__ __device__(");
+                list<formalParam *> argList = compareFunc->getParamList();
+                for (auto &arg : argList)
+                {
+                    Type *typ = arg->getType();
+                    targetFile.pushString(ConvertToCppType(typ, false, true));
+                    targetFile.pushString(" ");
+                    targetFile.pushString(arg->getIdentifier()->getIdentifier());
+                    if (arg != argList.back())
+                        targetFile.pushString(", ");
+                }
+                targetFile.pushString("){\n");
+                blockStatement *block = compareFunc->getBlockStatement();
+                list<statement *> stmtList = block->returnStatements();
+                for (auto &stmt : stmtList)
+                {
+                    GenerateStatement(stmt, isMainFile);
+                }
+                targetFile.pushString("});\n");
+            }
+            else
+            {
+                targetFile.pushString(");\n");
+            }
+            sprintf(strBuffer, "thrust::copy(d_%s.begin(), d_%s.end(), %s.begin())", exp1Id, exp1Id, exp1Id);
+            targetFile.pushString(strBuffer);
+        }
         else
         {
-
             // std::cout << "DANGER HIT";
             proc_callExpr *proc = expr;
             char strBuffer[1024];
@@ -2020,7 +2083,6 @@ namespace sphip
 
             if (objectId != NULL)
             {
-                // cout << "isnide here 1"<<endl;
                 Identifier *id2 = proc->getId2();
                 if (id2 != NULL)
                 {
@@ -2034,7 +2096,6 @@ namespace sphip
             }
             else if (indexExpr != NULL)
             {
-                // cout << "isnide here 2"<<endl;
                 cout << "ENTERED HERE FOR INDEXEXPR GENERATION DYNAMIC" << "\n";
                 Expression *mapExpr = indexExpr->getMapExpr();
                 Identifier *mapExprId = mapExpr->getId();

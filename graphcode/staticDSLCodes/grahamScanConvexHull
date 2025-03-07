@@ -201,7 +201,7 @@ function mergeTwoHulls(container<Point> points, int gid1, int gid2, int group_si
 function grahamScanConvexHull(int n, container<Point> points, int k)
 {
     int group_size = (n + k - 1) / k;
-    sort(points.begin(), points.end(), xComparator);
+    tsort(points.begin(), points.end(), xComparator);
     container<int>(k) L;
     container<int>(n, 0) stackArr;
     container<int>(k, 0) stackSize;

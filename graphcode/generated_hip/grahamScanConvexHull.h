@@ -6,6 +6,9 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_cooperative_groups.h>
 #include "../graph.hpp"
+#include <thrust/sort.h>
+#include <thrust/device_vector.h>
+#include <thrust/copy.h>
 
 auto xComparator(
     Point &a, Point &b);
@@ -78,7 +81,7 @@ __global__ void grahamScanConvexHull_kernel0(int V, int *L)
   L[v] = v;
 } // end KER FUNC
 
-__global__ void grahamScanConvexHull_kernel1(int V, int *stackSize, int *stackArr, int *L, Point *points, int n, int group_size)
+__global__ void grahamScanConvexHull_kernel1(int V, int *L, Point *points, int *stackSize, int *stackArr, int n, int group_size)
 { // BEGIN KER FUN via ADDKERNEL
   unsigned gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= V)
