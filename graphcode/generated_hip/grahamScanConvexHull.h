@@ -16,9 +16,18 @@ auto xComparator(
 auto crossProduct(
     Point &p1, Point &p2, Point &p3);
 
-void findTangents(
-    std::vector<Point> &points, int gid1, int gid2, int group_size,
-    std::vector<int> &stackArr, std::vector<int> &stackSize, std::vector<int> &tangents);
+auto findExtremePoints(
+    std::vector<Point> &points, int start, int hull_size, std::vector<int> &stackArr,
+    bool findRightmost);
+
+// DEVICE ASSTMENT in .h
+// DEVICE ASSTMENT in .h
+// DEVICE ASSTMENT in .h
+// DEVICE ASSTMENT in .h
+auto updateTangent(
+    bool done, int movingHullStart, int movingPoint, int movingHullSize,
+    int pivotHullStart, int pivotPoint, bool isCCW, std::vector<Point> &points,
+    std::vector<int> &stackArr);
 
 // DEVICE ASSTMENT in .h
 // DEVICE ASSTMENT in .h
@@ -26,27 +35,10 @@ void findTangents(
 // DEVICE ASSTMENT in .h
 // DEVICE ASSTMENT in .h
 // DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
-// DEVICE ASSTMENT in .h
+void findTangents(
+    std::vector<Point> &points, int gid1, int gid2, int group_size,
+    std::vector<int> &stackArr, std::vector<int> &stackSize, std::vector<int> &tangents);
+
 // DEVICE ASSTMENT in .h
 // DEVICE ASSTMENT in .h
 // DEVICE ASSTMENT in .h
@@ -81,7 +73,7 @@ __global__ void grahamScanConvexHull_kernel0(int V, int *L)
   L[v] = v;
 } // end KER FUNC
 
-__global__ void grahamScanConvexHull_kernel1(int V, int *L, Point *points, int *stackSize, int *stackArr, int n, int group_size)
+__global__ void grahamScanConvexHull_kernel1(int V, int *L, int *stackSize, int *stackArr, Point *points, int n, int group_size)
 { // BEGIN KER FUN via ADDKERNEL
   unsigned gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= V)
