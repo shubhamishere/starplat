@@ -29,6 +29,7 @@ enum TYPE
   TYPE_AUTOREF,
   TYPE_HEAP,
   TYPE_MAP,
+  TYPE_BTREE,
 };
 
 inline bool check_isNodeEdgeType(int typeId)
@@ -54,6 +55,10 @@ inline bool check_isHeapType(int typeId)
 inline bool check_isMapType(int typeId)
 {
   return typeId == TYPE_MAP;
+}
+inline bool check_isBTreeType(int typeId)
+{
+  return typeId == TYPE_BTREE;
 }
 inline bool check_isPrimitiveType(int typeId)
 {

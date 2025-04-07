@@ -236,6 +236,11 @@ public:
         Type *typeNode = Type::createForMapType(typeId, 1);
         return typeNode;
     }
+    static ASTNode *createBtreeTypeNode(int typeId)
+    {
+        Type *typeNode = Type::createForBtreeType(typeId, 1);
+        return typeNode;
+    }
     static ASTNode *createCollectionTypeNode(int typeId, ASTNode *targetGraph)
     {
         Type *typeNode = Type::createForCollectionType(typeId, 3, (Identifier *)targetGraph);
