@@ -716,6 +716,15 @@ public:
     return type;
   }
 
+  static Type *createForBtreeType(int typeIdSent, int rootTypeSent)
+  {
+    Type *type = new Type();
+    type->typeId = typeIdSent;
+    type->rootType = rootTypeSent;
+    type->setTypeofNode(NODE_TYPE);
+    return type;
+  }
+
   static Type *createForCollectionType(int typeIdSent, int rootTypeSent, Identifier *TargetGraphSent)
   {
     Type *type = new Type();
