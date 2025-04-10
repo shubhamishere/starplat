@@ -1410,6 +1410,17 @@ namespace spmpi
                 }
                 main.pushstr_newL(";");
             }
+            else if (type->gettypeId() == TYPE_BTREE)
+            {
+                main.pushstr_space(convertToCppType(type));
+                main.pushString(decl->getdeclId()->getIdentifier());
+                if (decl->isInitialized())
+                {
+                    main.pushString(" = ");
+                    generateExpr(decl->getExpressionAssigned());
+                }
+                main.pushstr_newL(";");
+            }
         }
     }
 
