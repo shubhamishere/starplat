@@ -121,6 +121,8 @@ void dsl_cpp_generator::generation_begin() {
   addIncludeToFile("stdio.h", header, true);
   header.pushString("#include ");
   addIncludeToFile("stdlib.h", header, true);
+  header.pushString("#include ");
+  addIncludeToFile("btree.h", header, false);
   //header.pushString("#include ");
   //addIncludeToFile("ParallelHeapCudaClass.cu", header, false);
   //header.pushString("#include ");
@@ -608,6 +610,8 @@ void dsl_cpp_generator::generateStatement(statement* stmt, bool isMainFile) {
   }
   if (stmt->getTypeofNode() == NODE_PROCCALLSTMT) {
     generateProcCall((proc_callStmt*)stmt, isMainFile);
+    dslCodePad& targetFile = isMainFile? main : header;
+    targetFile.pushstr_newL(";");
   }
   if (stmt->getTypeofNode() == NODE_UNARYSTMT) {
     unary_stmt* unaryStmt = (unary_stmt*)stmt;
@@ -2109,6 +2113,12 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
      main.pushString(declStmt->getdeclId()->getIdentifier());
      main.pushstr_newL(";");
    }
+   else if(type->isBtreeType())
+   { 
+     main.pushstr_space(convertToCppType(type));
+     main.pushString(declStmt->getdeclId()->getIdentifier());
+     main.pushstr_newL(";");
+   }
   //needs to handle carefully for PR code generation
   else if (type->isPrimitiveType()) {
     char strBuffer[1024];
@@ -2450,8 +2460,10 @@ void dsl_cpp_generator::generateArgList(list<argument*> argList, bool addBraces,
 
   char strBuffer[1024]; 
 
+  dslCodePad& targetFile = isMainFile? main : header;
+
   if(addBraces)
-     main.pushString("(") ;
+    targetFile.pushString("(") ;
 
   int argListSize = argList.size();
   int commaCounts = 0;
@@ -2465,12 +2477,12 @@ void dsl_cpp_generator::generateArgList(list<argument*> argList, bool addBraces,
    // main.pushString(strBuffer);
     generateExpr(expr,isMainFile);
     if(commaCounts < argListSize)
-       main.pushString(",");
+      targetFile.pushString(",");
 
   }
   
   if(addBraces)
-    main.pushString(")");
+    targetFile.pushString(")") ;
 
  }
 
@@ -2534,8 +2546,9 @@ void dsl_cpp_generator::generate_exprProcCall(Expression* expr,
 
             sprintf(strBuffer,"%s.%s.%s",objectId->getIdentifier(), id2->getIdentifier(), getProcName(proc).c_str());
           }
-        else
-        {
+          else
+          {
+            cout << "From here" << endl;
             sprintf(strBuffer,"%s.%s",objectId->getIdentifier(), getProcName(proc).c_str());  
       
         }
@@ -3127,6 +3140,9 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
   }
   else if(type->isMapType()){
   	return "Map";
+  }
+  else if(type->isBtreeType()){
+  	return "btree";
   }
   else if (type->isPrimitiveType()) {
     int typeId = type->gettypeId();

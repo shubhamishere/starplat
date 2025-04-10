@@ -865,6 +865,11 @@ public:
     return check_isMapType(typeId);
   }
 
+  bool isBtreeType()
+  {
+    return check_isBTreeType(typeId);
+  }
+
   bool isPropNodeType()
   {
     return check_isPropNodeType(typeId);

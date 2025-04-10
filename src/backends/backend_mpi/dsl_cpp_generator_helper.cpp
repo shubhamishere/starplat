@@ -168,6 +168,12 @@ namespace spmpi
                 cppString = vecString;
                 break;
             }
+            case TYPE_BTREE:
+            {
+                string vecString = "btree";
+                cppString = vecString;
+                break;
+            }
             default:
                 assert(false);
             }

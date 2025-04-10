@@ -133,7 +133,7 @@ NEGATE [-]
 "hashMap"  {printf("hashMap type"); return T_HASHMAP;}
 "hashSet"  {printf("hashSet type"); return T_HASHSET;}
 "Point" {printf("Point type"); return T_POINT;}
-"btree"  {printf("btree type"); return T_BTREE;}
+"BTree"  {printf("btree type"); return T_BTREE;}
 
 
  /* Numbers and Identifies */

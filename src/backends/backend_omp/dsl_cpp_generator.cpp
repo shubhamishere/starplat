@@ -37,6 +37,8 @@ void dsl_cpp_generator::generation_begin() {
   addIncludeToFile("limits.h", header, true);
   header.pushString("#include");
   addIncludeToFile("atomic", header, true);
+  header.pushString("#include");
+  addIncludeToFile("btree.h", header, false);
   //header.pushString("#include");
   //addIncludeToFile("ParallelHeapOpenMPClass.cpp", header, false);
   //header.pushString("#include");
@@ -1611,6 +1613,12 @@ void dsl_cpp_generator:: generateVariableDecl(declaration* declStmt)
      main.pushString(declStmt->getdeclId()->getIdentifier());
      main.pushstr_newL(";");
    }
+   else if(type->isBtreeType())
+   { 
+     main.pushstr_space(convertToCppType(type));
+     main.pushString(declStmt->getdeclId()->getIdentifier());
+     main.pushstr_newL(";");
+   }
    else if(type->isPrimitiveType())
    { 
      main.pushstr_space(convertToCppType(type));
@@ -2649,6 +2657,9 @@ const char* dsl_cpp_generator:: convertToCppType(Type* type)
   }
   else if(type->isMapType()){
   	return "Map";
+  }
+  else if(type->isBtreeType()){
+  	return "btree";
   }
   else if(type->isPrimitiveType())
   {

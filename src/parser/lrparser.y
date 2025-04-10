@@ -260,6 +260,7 @@ collections : T_LIST { $$=Util::createCollectionTypeNode(TYPE_LIST,NULL);};
 		| nodemap   {$$ = $1;}
 		| hashmap {$$ = $1;}
 	    | hashset {$$ = $1;}
+		| btree {$$ = $1;}
 
 structs: T_POINT { $$=Util::createPointTypeNode(TYPE_POINT);};
 
