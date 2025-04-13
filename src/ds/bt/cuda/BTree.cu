@@ -1,5 +1,5 @@
 // including the header file
-#include "btree.h"
+#include "BTree.h"
 
 // The different parameters for the code
 #define MAX_SIZE 32

@@ -4,7 +4,7 @@
 */
 
 // including the header file
-#include "btree.h"
+#include "BTree.h"
 
 // other imports for file reading and printing
 #include <string.h>
