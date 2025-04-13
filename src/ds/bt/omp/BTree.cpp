@@ -1,7 +1,8 @@
 // including the header file
-#include "BTree.h"
+#include "btree.h"
 
 // The different parameters for the code
+#define BATCH_SIZE 1024
 #define MAX_BTREE_SIZE 20000000
 #define MAX_VALUE_RANGE 10000000
 #define MAX_HOLES_SIZE 10000000
@@ -9,11 +10,35 @@
 #define CLUSTER_HOLES_SIZE 20000
 
 
+// a structure that defines the custom comparator to find the lower bound of the batch based on the keys of the element
+struct LowerBoundComparator {
+    bool operator()(const Node& node, const int& value) const {
+        return node.key < value;
+    }
+};
+
+
+// a structure that defines the custom comparator to find the upper bound of the batch based on the keys of the element
+struct UpperBoundComparator {
+    bool operator()(const int& value, const Node& node) const {
+        return value < node.key;
+    }
+};
+
+
+// a structure that defines the custom comparator to sort the batch based on the keys of the element
+struct CompareByKey {
+    bool operator()(const Node &a, const Node &b) const {
+        return a.key < b.key;
+    }
+};
+
+
 // function to perform parallel insertion
-void BTree::parallelInsert(int *btree, int **holes, int *holesCount, int *chunkElementCounter, int *addBatch, int addCount) {
+void btree::parallelInsert(Node *btreeArray, int **holes, int *holesCount, int *chunkElementCounter, Node *addBatch, int addCount) {
     /*
         Parameters:
-            btree : pointer to btree array
+            btreeArray : pointer to btree array
             holes : pointer to 2D holes array
             holesCount : pointer to an array that stores the number of elements present in the holes array for the current cluster
             chunkElementCounter : pointer to an array that stores the current total number of elements in each chunk
@@ -41,8 +66,8 @@ void BTree::parallelInsert(int *btree, int **holes, int *holesCount, int *chunkE
             endClusterValue = MAX_BTREE_SIZE - 1;
 
         // finding the range of elements from the insert batch on which each thread will work on (done by binary search)
-        int* start_itr = std::lower_bound(addBatch, addBatch + addCount, startClusterValue - MAX_VALUE_RANGE);
-        int* end_itr = std::upper_bound(addBatch, addBatch + addCount, endClusterValue - MAX_VALUE_RANGE);
+        Node* start_itr = std::lower_bound(addBatch, addBatch + addCount, startClusterValue - MAX_VALUE_RANGE, LowerBoundComparator());
+        Node* end_itr = std::upper_bound(addBatch, addBatch + addCount, endClusterValue - MAX_VALUE_RANGE, UpperBoundComparator());
 
         // if the thread has some elements to insert
         if (start_itr != end_itr)
@@ -53,10 +78,10 @@ void BTree::parallelInsert(int *btree, int **holes, int *holesCount, int *chunkE
 
             // the thread is responsible for inserting these elements
             for (index = startIdx; index < endIdx; index++) {
-                int elem = addBatch[index];
+                int elem = addBatch[index].key;     // we are selecting the chunk based on the key (so now the btree is sorted based on the keys)
 
                 // random chunk calculation
-                int cluster = abs((elem + MAX_VALUE_RANGE) / (4 * CHUNK_SIZE));             //cluster Size = 4 * chunk size
+                int cluster = abs((elem + MAX_VALUE_RANGE) / (4 * CHUNK_SIZE));             //cluster size = 4 * chunk size
                 srand(time(0));
                 int chunk = rand() % 4;
                 int chunkStart = (cluster * 4 * CHUNK_SIZE) + (chunk * CHUNK_SIZE);
@@ -88,7 +113,8 @@ void BTree::parallelInsert(int *btree, int **holes, int *holesCount, int *chunkE
                 }
 
                 // insert the element
-                btree[insertIndex] = elem;
+                btreeArray[insertIndex].key = elem;
+                btreeArray[insertIndex].value = addBatch[index].value;
             }
         }
     }
@@ -96,10 +122,10 @@ void BTree::parallelInsert(int *btree, int **holes, int *holesCount, int *chunkE
 
 
 // function to perform parallel searching
-int* BTree::parallelSearch (int *btree, int *searchBatch, int searchCount, int *searchResult) {
+int* btree::parallelSearch (Node *btreeArray, int *searchBatch, int searchCount, int *searchResult) {
     /*
         Parameters:
-            btree : pointer to btree array
+            btreeArray : pointer to btree array
             searchBatch : pointer to the batch to search
             searchCount : an integer denoting the number of elements in the current batch to be searched
             searchResult : pointer to an array that stores the result of the searching
@@ -148,9 +174,9 @@ int* BTree::parallelSearch (int *btree, int *searchBatch, int searchCount, int *
 
                 //searching over the cluster for the element
                 for (int searchIndex = clusterStart; searchIndex < clusterEnd; searchIndex++) {
-                    if (btree[searchIndex] == elem) {
+                    if (btreeArray[searchIndex].key == elem) {
                         // store the result of successful searching into the searchResult array
-                        searchResult[index] = searchIndex;
+                        searchResult[index] = btreeArray[searchIndex].value;
                         searchFlag = true;
                         break;
                     }
@@ -164,12 +190,12 @@ int* BTree::parallelSearch (int *btree, int *searchBatch, int searchCount, int *
         }
     }
 
-    return searchBatch;
+    return searchResult;
 }
 
 
 // function to perform parallel deletion
-void BTree::parallelRemove (int *btree, int **holes, int *holesCount, int *deleteBatch, int deleteCount) {
+void btree::parallelRemove (Node *btreeArray, int **holes, int *holesCount, int *deleteBatch, int deleteCount) {
     /*
         Parameters:
             btree : pointer to btree array
@@ -220,12 +246,13 @@ void BTree::parallelRemove (int *btree, int **holes, int *holesCount, int *delet
 
                 //searching over the cluster for the element
                 for (int searchIndex = clusterStart; searchIndex < clusterEnd; searchIndex++) {
-                    if (btree[searchIndex] == elem) {
+                    if (btreeArray[searchIndex].key == elem) {
                         //no need of synchronization as no other thread will work on this cluster simultaneously
                         // mark the index in the holes array
                         holes[cluster][holesCount[cluster]] = searchIndex;
                         // mark the index as deleted in the btree array
-                        btree[searchIndex] = INT_MIN;
+                        btreeArray[searchIndex].key = INT_MIN;
+                        btreeArray[searchIndex].value = INT_MIN;
                         // increment the holes count
                         if (holesCount[cluster] < CLUSTER_HOLES_SIZE)
                             holesCount[cluster]++;
@@ -239,23 +266,23 @@ void BTree::parallelRemove (int *btree, int **holes, int *holesCount, int *delet
 
 
 // constructor
-BTree::BTree() {
+btree::btree() {
     // calling the function to allocate the memory for the different arrays
     initMemory();
 }
 
 
 // destructor
-BTree::~BTree() {
+btree::~btree() {
     // calling the function to deallocate the memory for the different arrays
     freeMemory();
 }
 
 
 // function to allocate memory for the different arrays
-void BTree::initMemory() {
+void btree::initMemory() {
     // allocate memory for btree
-    btree = (int*) malloc (MAX_BTREE_SIZE * sizeof(int));
+    btreeArray = (Node*) malloc (MAX_BTREE_SIZE * sizeof(Node));
     
     // allocate memory for holes
     int numClusters = ceil((double)MAX_BTREE_SIZE / (4 * CHUNK_SIZE));
@@ -270,20 +297,33 @@ void BTree::initMemory() {
     
     // allocate memory for chunkElementCounter
     chunkElementCounter = (int*) malloc ((ceil(MAX_BTREE_SIZE/(double)CHUNK_SIZE)*sizeof(int)) * sizeof(int));
+
+    // allocating memory for the batch arrays
+    addBatch = (Node*) malloc(BATCH_SIZE * sizeof(Node));
+    searchBatch = (int*) malloc(BATCH_SIZE * sizeof(int));
+    deleteBatch = (int*) malloc(BATCH_SIZE * sizeof(int));
+
+    // initializing the count of elements in the batches
+    addCount = 0;
+    searchCount = 0;
+    deleteCount = 0;
 }
 
 
 // function to deallocate memory for the different arrays
-void BTree::freeMemory() {
-    free (btree);
+void btree::freeMemory() {
+    free (btreeArray);
     free (holes);
     free (holesCount);
     free (chunkElementCounter);
+    free (addBatch);
+    free (searchBatch);
+    free (deleteBatch);
 }
 
 
-// insert function for user
-void BTree::insert(int* addBatch, int addCount) { 
+// insert function for user to insert a batch
+void btree::batchInsert(Node* addBatch, int addCount) { 
     /*
         Parameters:
             addBatch : pointer to the batch to add
@@ -291,15 +331,16 @@ void BTree::insert(int* addBatch, int addCount) {
     */
 
     // sort the batch (to allow binary searching)
-    std::sort(addBatch, addBatch + addCount);
+    if(addCount > 1)
+        std::sort(addBatch, addBatch + addCount, CompareByKey());
 
     // parallel insert function call
-    parallelInsert(btree, holes, holesCount, chunkElementCounter, addBatch, addCount);
+    parallelInsert(btreeArray, holes, holesCount, chunkElementCounter, addBatch, addCount);
 }
 
 
-// search function for user
-int* BTree::search(int* searchBatch, int searchCount) {
+// search function for user to insert a batch
+int* btree::batchSearch(int* searchBatch, int searchCount) {
     /*
         Parameters:
             searchBatch : pointer to the batch to search
@@ -307,20 +348,21 @@ int* BTree::search(int* searchBatch, int searchCount) {
     */
 
     // sort the batch (to allow binary searching)
-    std::sort(searchBatch, searchBatch + searchCount);
+    if(searchCount > 1)
+        std::sort(searchBatch, searchBatch + searchCount);
 
     // allocate memory for the result array
-    int *searchResult = (int*)malloc(searchCount * sizeof(int));
+    int *searchResult = (int*)malloc((searchCount) * sizeof(int));
 
     // parallel search function call
-    searchResult = parallelSearch (btree, searchBatch, searchCount, searchResult);
+    searchResult = parallelSearch (btreeArray, searchBatch, searchCount, searchResult);
 
     return searchResult;
 }
 
 
-// delete function for user
-void BTree::remove(int* deleteBatch, int deleteCount) {
+// delete function for user to insert a batch
+void btree::batchRemove(int* deleteBatch, int deleteCount) {
     /*
         Parameters:
             deleteBatch : pointer to the batch to delete
@@ -328,8 +370,70 @@ void BTree::remove(int* deleteBatch, int deleteCount) {
     */
 
     // sort the batch (to allow binary searching)
-    std::sort(deleteBatch, deleteBatch + deleteCount);
+    if(deleteCount > 1)
+        std::sort(deleteBatch, deleteBatch + deleteCount);
 
     // parallel delete function call
-    parallelRemove (btree, holes, holesCount, deleteBatch, deleteCount);
+    parallelRemove (btreeArray, holes, holesCount, deleteBatch, deleteCount);
+}
+
+
+// declaring a function to insert one key-value pair
+void btree::insertNode(int key, int value) {
+    /*
+        Parameters:
+            key : key of the element which is to be inserted
+            value : value corresponding to the key of the element which is to be inserted
+    */
+
+    // creating the node object
+    Node newNode(key, value);
+
+    // adding the element to the batch
+    addBatch[addCount++] = newNode;
+
+    // calling the batch insert function to insert the element (the size of the batch passed is of one element)
+    batchInsert(addBatch, addCount);
+
+    // resetting the batch size count
+    addCount = 0;
+}
+
+
+// declaring a function to search one key-value pair
+int* btree::search(int key) {
+    /*
+        Parameters:
+            key : key of the element which is to be searched
+    */
+
+    // adding the key to the batch
+    searchBatch[searchCount++] = key;
+
+    // calling the batch search function to search for the key (the size of the batch passed is of one element)
+    int* searchResult = batchSearch(searchBatch, searchCount);
+
+    // resetting the batch size count
+    searchCount = 0;
+
+    // returing back the pointer to the array that stores the result of the search
+    return searchResult;
+}
+
+
+// declaring a function to delete one key-value pair
+void btree::remove(int key) {
+    /*
+        Parameters:
+            key : key of the element which is to be deleted
+    */
+
+    // adding the key to the batch
+    deleteBatch[deleteCount++] = key;
+
+    // calling the batch delete function to delete for the key (the size of the batch passed is of one element)
+    batchRemove(deleteBatch, deleteCount);
+
+    // resetting the batch size count
+    deleteCount = 0;
 }

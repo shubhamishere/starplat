@@ -1,34 +1,61 @@
 #ifndef CUDA_BTREE_H
+#define CUDA_BTREE_H
 
 // required libraries
 #include <cuda.h>
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+#include <climits>
+
+
+// a structure that defines each element node of the btree
+struct Node {
+    // integers representing the key and the value
+    int key;
+    int value;
+
+    // constructor
+    Node(int k, int v) : key(k), value(v) {};
+};
 
 
 // Btree class
-class BTree {
+class btree {
     // method declarations
     public:
-        BTree(int);
-        ~BTree();
+        btree();
+        ~btree();
 
-        void insert(int*, int);
-        int* search(int*, int);
-        void remove(int*, int);
-        void initMemory(int);
-        void freeMemory();
-    
-    // array declarations
+        void insertNode(int, int);
+        int* searchDevice(int);
+        int* searchHost(int);
+        void remove(int);
+
+        void batchInsert(Node*, int);
+        int* batchSearchHost(int*, int);
+        int* batchSearchDevice(int*, int);
+        void batchRemove(int*, int);
+
+        
+        Node *addBatch;
+        int *searchBatch;
+        int *deleteBatch;
+        
+        int addCount;
+        int searchCount;
+        int deleteCount;
+        
     private:
-        int *btree;
+        void initMemory();
+        void freeMemory();
+
+        Node *btreeArray;
         int **holes;
         int *elementCounter;
         unsigned int *lastHoleCounter;
         
         int insertionChunkPos;
-        
         int *insertionChunksHost;
 };
 

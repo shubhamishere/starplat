@@ -1,4 +1,5 @@
 #ifndef OMP_BTREE_H
+#define OMP_BTREE_H
 
 // required libraries
 #include <omp.h>
@@ -10,26 +11,50 @@
 #include <algorithm>
 
 
+// a structure that defines each element node of the btree
+struct Node {
+    // integers representing the key and the value
+    int key;
+    int value;
+
+    // constructor
+    Node(int k, int v) : key(k), value(v) {};
+};
+
+
 // Btree class
-class BTree {
+class btree {
     // user method declarations
     public:
-        BTree();
-        ~BTree();
+        btree();
+        ~btree();
 
-        void insert(int*, int);
-        int* search(int*, int);
-        void remove(int*, int);
+        void insertNode(int, int);
+        int* search(int);
+        void remove(int);
+
+        void batchInsert(Node*, int);
+        int* batchSearch(int*, int);
+        void batchRemove(int*, int);
+
+        
+        Node *addBatch;
+        int *searchBatch;
+        int *deleteBatch;
+        
+        int addCount;
+        int searchCount;
+        int deleteCount;
+        
+    private:
         void initMemory();
         void freeMemory();
-    
-    // arrays and parallel method declarations
-    private:
-        void parallelInsert(int*, int**, int*, int*, int*, int);
-        int* parallelSearch(int*, int*, int , int*);
-        void parallelRemove(int*, int**, int*, int*, int);
+        
+        void parallelInsert(Node*, int**, int*, int*, Node*, int);
+        int* parallelSearch(Node*, int*, int , int*);
+        void parallelRemove(Node*, int**, int*, int*, int);
 
-        int *btree;
+        Node *btreeArray;
         int** holes;
         int *holesCount;
         int *chunkElementCounter;
