@@ -1,5 +1,5 @@
 // including the header file
-#include "btree.h"
+#include "BTree.h"
 #include <iostream>
 
 // The different parameters for the code
