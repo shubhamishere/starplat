@@ -64,7 +64,7 @@ namespace spmpi
         header.pushString("#include");
         addIncludeToFile("../mpi_header/graph_mpi.h", header, false);
         header.pushString("#include");
-        addIncludeToFile("btree.h", header, false);
+        addIncludeToFile("BTree.h", header, false);
         header.NewLine();
         main.pushString("#include");
         sprintf(temp, "%s.h", fileName);
