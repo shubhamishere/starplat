@@ -9,6 +9,7 @@
 #include <climits>
 #include <ctime>
 #include <algorithm>
+#include <iostream>
 
 
 // a structure that defines each element node of the btree
@@ -31,13 +32,16 @@ class btree {
         btree();
         ~btree();
 
+        // user APIs
         void insertNode(int, int);
-        int* search(int);
+        int search(int);
         void remove(int);
+        void update(int, int);
 
         void batchInsert(Node*, int);
         int* batchSearch(int*, int);
         void batchRemove(int*, int);
+        void batchUpdate(Node*, int);
         
         int pid;
         int total_process;
@@ -46,10 +50,14 @@ class btree {
         Node *addBatch;
         int *searchBatch;
         int *deleteBatch;
+        Node *updateBatch;
         
         int addCount;
         int searchCount;
         int deleteCount;
+        int updateCount;
+
+        void printBTree();
     
     // array declarations
     private:

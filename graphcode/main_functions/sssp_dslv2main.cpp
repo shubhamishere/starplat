@@ -28,7 +28,18 @@ int main(int argc, char*argv[]) {
     g.parseGraph();
     int num_nodes = g.num_nodes();
     std::vector<int> dist(num_nodes, INT_MAX);
-    std::vector<int> weight(g.num_edges(), 0);
+    
+    int num_edges = g.num_edges();
+    std::vector<int> weight(num_edges);
+    int edgeNum = 0;
+    for (int v = 0; v < num_nodes; v ++) {
+        for (int edge = g.indexofNodes[v]; edge < g.indexofNodes[v+1]; edge ++) {
+            int nbr = g.edgeList[edge];
+            weight[edgeNum] = g.getEdge(v, nbr).weight;
+            edgeNum++;
+        }
+    }
+
     int src = 0;
 
     double starttime = omp_get_wtime();

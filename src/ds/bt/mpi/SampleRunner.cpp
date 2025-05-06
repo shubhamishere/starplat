@@ -32,13 +32,19 @@ int main(int argc, char** argv) {
             inputFile >> value;
             bt.insertNode(num, value);
         }
+        // updating
+        else if (command == 'u') {
+            int value;
+            inputFile >> value;
+            bt.update(num, value);
+        }
         // searching
         else if(command == 's') {
-            int *searchResult = bt.search(num);
+            int searchResult = bt.search(num);
 
             if (bt.pid == 0) {
-                if(searchResult[0] == INT_MIN)  cout << "Key " << num << " is not found" << endl;
-                else cout << "Value " << searchResult[0] << " is found for key " << num << endl;
+                if(searchResult == INT_MIN)  cout << "Key " << num << " is not found" << endl;
+                else cout << "Value " << searchResult << " is found for key " << num << endl;
             }
         }
         // deletion
