@@ -1,6 +1,5 @@
 // including the header file
 #include "BTree.h"
-#include <iostream>
 
 // The different parameters for the code
 #define BATCH_SIZE 30000
@@ -68,11 +67,13 @@ void btree::initMemory() {
     addBatch = (Node*)malloc(BATCH_SIZE * sizeof(Node));
     searchBatch = (int*)malloc(BATCH_SIZE * sizeof(int));
     deleteBatch = (int*)malloc(BATCH_SIZE * sizeof(int));
+    updateBatch = (Node*)malloc(BATCH_SIZE * sizeof(Node));
     
     // initializing the count of elements in the batches
     addCount = 0;
     deleteCount = 0;
     searchCount = 0;
+    updateCount = 0;
 }
 
 
@@ -83,6 +84,7 @@ void btree::freeMemory() {
     free (addBatch);
     free (searchBatch);
     free (deleteBatch);
+    free (updateBatch);
 }
 
 
@@ -104,7 +106,7 @@ void btree::batchInsert(Node *addBatch, int addCount) {
     MPI_Bcast(holes, numClusters * CLUSTER_HOLES_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
 
     // broadcast the insertion batch among all the processes
-    MPI_Bcast(addBatch, addCount, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(addBatch, addCount, MPI_Node, 0, MPI_COMM_WORLD);
 
     // parallel execution starts
 
@@ -300,6 +302,114 @@ int* btree::batchSearch(int *searchBatch, int searchCount) {
 }
 
 
+// parallel update function for user to search a batch
+void btree::batchUpdate(Node *updateBatch, int updateCount) {
+    /*
+        Parameters:
+            updateBatch : pointer to the array containing the batch to be updated
+            updateCount : an integer denoting the number of elements in the current batch to be updated
+    */
+
+    // calculating the total number of clusters in the btree
+    int numClusters = ceil((double)MAX_BTREE_SIZE / (4 * CHUNK_SIZE));
+
+    // braodcast the btree among all the processes first
+    MPI_Bcast(btreeArray, MAX_BTREE_SIZE, MPI_Node, 0, MPI_COMM_WORLD);
+
+    // broadcast the holes array among all the processes
+    MPI_Bcast(holes, numClusters * CLUSTER_HOLES_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+                    
+    // broadcast the batch now among all the processes
+    MPI_Bcast(updateBatch, updateCount, MPI_Node, 0, MPI_COMM_WORLD);
+
+    // parallel execution starts
+
+    // finding the range of cluster values for each process
+    int startClusterValue = (MAX_BTREE_SIZE / total_process) * pid;
+    int endClusterValue = (MAX_BTREE_SIZE / total_process) * (pid + 1) - 1;
+    if (pid == total_process - 1)
+        endClusterValue = MAX_BTREE_SIZE - 1;
+
+    // iterating over the whole batch for each process and finding which element belongs to its range to search
+    for (int index = 0; index < updateCount; index++) {
+        int elem = updateBatch[index].key;
+        int val = updateBatch[index].value;
+
+        // check if the element is within the range of the current process
+        if (elem >= (startClusterValue - MAX_VALUE_RANGE) && elem <= (endClusterValue - MAX_VALUE_RANGE)) {
+            int cluster = abs((elem + MAX_VALUE_RANGE) / (4 * CHUNK_SIZE));
+            int clusterStart = cluster * 4 * CHUNK_SIZE;
+            int clusterEnd = clusterStart + 4 * CHUNK_SIZE;
+
+            bool searchFlag = false;
+            
+            // iterate over the cluster to find the element
+            for (int searchIndex = clusterStart; searchIndex < clusterEnd; searchIndex++) {
+                if (btreeArray[searchIndex].key == elem) {
+                    // store the result of successful searching into the search batch itself
+                    btreeArray[searchIndex].value = val;
+                    searchFlag = true;
+                    break;
+                }
+            }
+
+            // if search was unsuccessful then we need to insert the element directly into the tree
+            if (!searchFlag) {
+                srand(time(0));
+                int chunk = rand() % 4;
+                int chunkStart = (cluster * 4 * CHUNK_SIZE) + (chunk * CHUNK_SIZE) + 1;
+                int chunkEnd = chunkStart + CHUNK_SIZE - 1;
+
+                int insertIndex = INT_MIN;
+                
+                // checking if a hole is present in the cluster which can be utilised for insertion
+                for (int holeIndex = 1; holeIndex < CLUSTER_HOLES_SIZE; holeIndex++) {
+                    if(holes[cluster][holeIndex] != INT_MIN && holes[cluster][holeIndex] >= chunkStart && holes[cluster][holeIndex] <= chunkEnd) {
+                        // acquiring the hole
+                        // no need of synchronization as no other process will work on this cluster simultaneously
+                        insertIndex = holes[cluster][holeIndex];
+                        holes[cluster][holeIndex] = INT_MIN;
+                    }
+                    // as soon as we reach a hole index which is unoccupied we break out of the loop (in this way we do not traverse the whole array on each iteration)
+                    else if (holes[cluster][holeIndex] == INT_MAX)
+                        break;
+                }
+
+                // if no hole is found
+                int iter = 0;
+                if (insertIndex == INT_MIN) {
+                    // we will try the four chunks in the cluster in worst case
+                    while (iter < 4) {
+                        int chunkElementCount = btreeArray[cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE].value;
+
+                        // this check satisfies means the chunk is not yet full and hence can be used for insertion
+                        if (chunkElementCount < (CHUNK_SIZE - 1))
+                            break;
+                        if (chunk == 3) chunk = 0;
+                        else chunk++;
+
+                        iter++;
+                    }
+                    
+                    // calculate the index to insert from the first index in the btree cluster
+                    btreeArray[cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE].value++;
+                    insertIndex = cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE + btreeArray[cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE].value;
+                }
+
+                // insert the element
+                btreeArray[insertIndex].key = elem;
+                btreeArray[insertIndex].value = val;
+            }
+        }
+    }
+
+    // collect back all the arrays into rank 0 process (master process) one by one
+    int btreePart = endClusterValue - startClusterValue + 1;
+    MPI_Gather(&btreeArray[startClusterValue], btreePart, MPI_Node, btreeArray, btreePart, MPI_Node, 0, MPI_COMM_WORLD);
+    MPI_Reduce(pid == 0 ? MPI_IN_PLACE : holes, holes, numClusters * CLUSTER_HOLES_SIZE, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+}
+
+
 // parallel insert function for user to insert one element
 void btree::insertNode(int key, int value) {
     /*
@@ -321,7 +431,7 @@ void btree::insertNode(int key, int value) {
     MPI_Bcast(holes, numClusters * CLUSTER_HOLES_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
 
     // broadcast the insertion batch among all the processes
-    MPI_Bcast(addBatch, addCount, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(addBatch, addCount, MPI_Node, 0, MPI_COMM_WORLD);
 
     // parallel execution starts
 
@@ -470,7 +580,7 @@ void btree::remove(int key) {
 
 
 // parallel search function for user to search one element
-int* btree::search(int key) {
+int btree::search(int key) {
     /*
         Parameters:
             key : key of the element which is to be searched
@@ -527,6 +637,129 @@ int* btree::search(int key) {
     //resetting the batch element count
     if (pid == 0) {
         searchCount = 0;
-        return searchBatch;
+        return searchBatch[searchCount];
+    }
+}
+
+
+// parallel update function for user to update one element
+void btree::update(int key, int newValue) {
+    /*
+        Parameters:
+            key : key of the element which is to be updated
+            newValue : new value corresponding to the key of the element which is to be updated
+    */
+    
+    // calculating the total number of clusters in the btree
+    int numClusters = ceil((double)MAX_BTREE_SIZE / (4 * CHUNK_SIZE));
+
+    if (pid == 0)
+        updateBatch[updateCount++] = Node(key, newValue);
+
+    // braodcast the btree among all the processes first
+    MPI_Bcast(btreeArray, MAX_BTREE_SIZE, MPI_Node, 0, MPI_COMM_WORLD);
+
+    // broadcast the holes array among all the processes
+    MPI_Bcast(holes, numClusters * CLUSTER_HOLES_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+                    
+    // broadcast the batch now among all the processes
+    MPI_Bcast(updateBatch, updateCount, MPI_Node, 0, MPI_COMM_WORLD);
+
+    // parallel execution starts
+
+    // finding the range of cluster values for each process
+    int startClusterValue = (MAX_BTREE_SIZE / total_process) * pid;
+    int endClusterValue = (MAX_BTREE_SIZE / total_process) * (pid + 1) - 1;
+    if (pid == total_process - 1)
+        endClusterValue = MAX_BTREE_SIZE - 1;
+
+    // iterating over the whole batch for each process and finding which element belongs to its range to search
+    for (int index = 0; index < updateCount; index++) {
+        int elem = updateBatch[index].key;
+        int val = updateBatch[index].value;
+
+        // check if the element is within the range of the current process
+        if (elem >= (startClusterValue - MAX_VALUE_RANGE) && elem <= (endClusterValue - MAX_VALUE_RANGE)) {
+            int cluster = abs((elem + MAX_VALUE_RANGE) / (4 * CHUNK_SIZE));
+            int clusterStart = cluster * 4 * CHUNK_SIZE;
+            int clusterEnd = clusterStart + 4 * CHUNK_SIZE;
+
+            bool searchFlag = false;
+            
+            // iterate over the cluster to find the element
+            for (int searchIndex = clusterStart; searchIndex < clusterEnd; searchIndex++) {
+                if (btreeArray[searchIndex].key == elem) {
+                    // store the result of successful searching into the search batch itself
+                    btreeArray[searchIndex].value = val;
+                    searchFlag = true;
+                    break;
+                }
+            }
+
+            // if search was unsuccessful then we need to insert the element directly into the tree
+            if (!searchFlag) {
+                srand(time(0));
+                int chunk = rand() % 4;
+                int chunkStart = (cluster * 4 * CHUNK_SIZE) + (chunk * CHUNK_SIZE) + 1;
+                int chunkEnd = chunkStart + CHUNK_SIZE - 1;
+
+                int insertIndex = INT_MIN;
+                
+                // checking if a hole is present in the cluster which can be utilised for insertion
+                for (int holeIndex = 1; holeIndex < CLUSTER_HOLES_SIZE; holeIndex++) {
+                    if(holes[cluster][holeIndex] != INT_MIN && holes[cluster][holeIndex] >= chunkStart && holes[cluster][holeIndex] <= chunkEnd) {
+                        // acquiring the hole
+                        // no need of synchronization as no other process will work on this cluster simultaneously
+                        insertIndex = holes[cluster][holeIndex];
+                        holes[cluster][holeIndex] = INT_MIN;
+                    }
+                    // as soon as we reach a hole index which is unoccupied we break out of the loop (in this way we do not traverse the whole array on each iteration)
+                    else if (holes[cluster][holeIndex] == INT_MAX)
+                        break;
+                }
+
+                // if no hole is found
+                int iter = 0;
+                if (insertIndex == INT_MIN) {
+                    // we will try the four chunks in the cluster in worst case
+                    while (iter < 4) {
+                        int chunkElementCount = btreeArray[cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE].value;
+
+                        // this check satisfies means the chunk is not yet full and hence can be used for insertion
+                        if (chunkElementCount < (CHUNK_SIZE - 1))
+                            break;
+                        if (chunk == 3) chunk = 0;
+                        else chunk++;
+
+                        iter++;
+                    }
+                    
+                    // calculate the index to insert from the first index in the btree cluster
+                    btreeArray[cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE].value++;
+                    insertIndex = cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE + btreeArray[cluster * 4 * CHUNK_SIZE + chunk * CHUNK_SIZE].value;
+                }
+
+                // insert the element
+                btreeArray[insertIndex].key = elem;
+                btreeArray[insertIndex].value = val;
+            }
+        }
+    }
+
+    // collect back all the arrays into rank 0 process (master process) one by one
+    int btreePart = endClusterValue - startClusterValue + 1;
+    MPI_Gather(&btreeArray[startClusterValue], btreePart, MPI_Node, btreeArray, btreePart, MPI_Node, 0, MPI_COMM_WORLD);
+    MPI_Reduce(pid == 0 ? MPI_IN_PLACE : holes, holes, numClusters * CLUSTER_HOLES_SIZE, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
+
+    //resetting the batch element count
+    if (pid == 0)
+        updateCount = 0;
+}
+
+
+// function to print the tree
+void btree::printBTree() {
+    for (int i = 0; i < MAX_BTREE_SIZE; i++) {
+        std::cout << "Key : " << btreeArray[i].key << " Value : " << btreeArray[i].value << std::endl;
     }
 }
