@@ -55,7 +55,7 @@
 %token T_ADD_ASSIGN T_SUB_ASSIGN T_MUL_ASSIGN T_DIV_ASSIGN T_MOD_ASSIGN T_AND_ASSIGN T_XOR_ASSIGN
 %token T_OR_ASSIGN T_INC_OP T_DEC_OP T_PTR_OP T_AND_OP T_OR_OP T_LE_OP T_GE_OP T_EQ_OP T_NE_OP
 %token T_AND T_OR T_SUM T_AVG T_COUNT T_PRODUCT T_MAX T_MIN
-%token T_GRAPH T_DIR_GRAPH  T_NODE T_EDGE T_UPDATES T_CONTAINER T_POINT T_NODEMAP T_VECTOR T_HASHMAP T_HASHSET T_BTREE
+%token T_GRAPH T_DIR_GRAPH  T_NODE T_EDGE T_UPDATES T_CONTAINER T_POINT T_UNDIREDGE T_TRIANGLE T_NODEMAP T_VECTOR T_HASHMAP T_HASHSET T_BTREE
 %token T_NP  T_EP
 %token T_LIST T_SET_NODES T_SET_EDGES  T_FROM
 %token T_BFS T_REVERSE
@@ -263,6 +263,8 @@ collections : T_LIST { $$=Util::createCollectionTypeNode(TYPE_LIST,NULL);};
 		| btree {$$ = $1;}
 
 structs: T_POINT { $$=Util::createPointTypeNode(TYPE_POINT);};
+	| T_UNDIREDGE { $$=Util::createUndirectedEdgeTypeNode(TYPE_UNDIREDGE);};
+	| T_TRIANGLE { $$=Util::createTriangleTypeNode(TYPE_TRIANGLE);};
 
 container : T_CONTAINER '<' type '>' '(' arg_list ',' type ')' {$$ = Util::createContainerTypeNode(TYPE_CONTAINER, $3, $6->AList, $8);}
           | T_CONTAINER '<' type '>' '(' arg_list ')' { $$ =  Util::createContainerTypeNode(TYPE_CONTAINER, $3, $6->AList, NULL);}

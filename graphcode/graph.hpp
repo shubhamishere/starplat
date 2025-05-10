@@ -976,10 +976,25 @@ struct Point
   double x;
   double y;
 
-  Point(double x, double y)
-  {
-    this->x = x;
-    this->y = y;
-  }
+  Point() {};
+  Point(double x, double y) : x(x), y(y) {};
+};
 
+struct Edge
+{
+  int p1;
+  int p2;
+
+  Edge() {};
+  Edge(int p1, int p2) : p1(p1), p2(p2) {};
+}
+
+struct Triangle
+{
+  int p1;
+  int p2;
+  int p3;
+
+  Triangle() {};
+  Triangle(int p1, int p2, int p3) : p1(p1), p2(p2), p3(p3) {};
 };

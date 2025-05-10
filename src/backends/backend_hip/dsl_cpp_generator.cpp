@@ -561,6 +561,30 @@ namespace sphip
                 return "Point";
             }
         }
+        else if (type->isUndirectedEdgeType())
+        {
+            std::cout << "Edge Type\n";
+            if (isParameter)
+            {
+                return "Edge&";
+            }
+            else
+            {
+                return "Edge";
+            }
+        }
+        else if (type->isTriangleType())
+        {
+            std::cout << "Triangle Type\n";
+            if (isParameter)
+            {
+                return "Triangle&";
+            }
+            else
+            {
+                return "Triangle";
+            }
+        }
 
         return "NA";
     }
@@ -757,7 +781,7 @@ namespace sphip
                 }
             }
         }
-        else if (type->isPointType())
+        else if (type->isStructType())
         {
             targetFile.pushString(ConvertToCppType(type));
             targetFile.push(' ');
@@ -863,25 +887,40 @@ namespace sphip
             }
         }
         else if (stmt->lhs_isProp())
-        { // the check for node and edge property to be carried out.
-            std::cout << "LHS PROP " << endl;
+        {
+            // check if its actually a struct member access
+            // if so, then we need to generate the code for that as well.
             PropAccess *propId = stmt->getPropId();
-            if (stmt->getAtomicSignal())
+            Identifier *iden = propId->getIdentifier1();
+            Type *idenType = iden->getSymbolInfo()->getType();
+            if (idenType->isStructType())
             {
-                targetFile.pushString("atomicAdd(&");
-                isAtomic = true;
+                std::cout << "Struct type\n";
+                targetFile.pushString(iden->getIdentifier());
+                targetFile.pushString(".");
+                targetFile.pushString(propId->getIdentifier2()->getIdentifier());
             }
-            if (stmt->isAccumulateKernel())
-            { // NOT needed
-                isResult = true;
-                std::cout << "\t  RESULT NO BC by 2 ASST" << '\n';
+            else
+            {
+                // the check for node and edge property to be carried out.
+                std::cout << "LHS PROP " << endl;
+                if (stmt->getAtomicSignal())
+                {
+                    targetFile.pushString("atomicAdd(&");
+                    isAtomic = true;
+                }
+                if (stmt->isAccumulateKernel())
+                { // NOT needed
+                    isResult = true;
+                    std::cout << "\t  RESULT NO BC by 2 ASST" << '\n';
+                }
+                std::string varName = CapitalizeFirstLetter(std::string(propId->getIdentifier2()->getIdentifier()));
+                varName = "d" + varName;
+                targetFile.pushString(varName);
+                targetFile.push('[');
+                targetFile.pushString(propId->getIdentifier1()->getIdentifier());
+                targetFile.push(']');
             }
-            std::string varName = CapitalizeFirstLetter(std::string(propId->getIdentifier2()->getIdentifier()));
-            varName = "d" + varName;
-            targetFile.pushString(varName);
-            targetFile.push('[');
-            targetFile.pushString(propId->getIdentifier1()->getIdentifier());
-            targetFile.push(']');
         }
         else if (stmt->lhs_isIndexAccess())
         {
@@ -1863,7 +1902,7 @@ namespace sphip
         {
             if (isMainFile)
             {
-                if (id1->getSymbolInfo()->getType()->isPointType())
+                if (id1->getSymbolInfo()->getType()->isStructType())
                 {
                     value = id1->getIdentifier() + string(".") + id2->getIdentifier();
                 }
@@ -1874,7 +1913,7 @@ namespace sphip
             }
             else
             {
-                if (id1->getSymbolInfo()->getType()->isPointType())
+                if (id1->getSymbolInfo()->getType()->isStructType())
                 {
                     value = id1->getIdentifier() + string(".") + id2->getIdentifier();
                 }
@@ -2541,7 +2580,8 @@ namespace sphip
                     sprintf(strBuffer, "\nfor(int i = 0 ; i < %s.size() ; i++)", sourceId->getIdentifier());
                     main.pushstr_newL(strBuffer);
                     main.pushString("{\n");
-                    sprintf(strBuffer, "int %s = %s[i];\n", iterator->getIdentifier(), sourceId->getIdentifier());
+                    std::string innerTypeString = ConvertToCppType(sourceId->getSymbolInfo()->getType()->getInnerTargetType());
+                    sprintf(strBuffer, "%s %s = %s[i];\n", innerTypeString.c_str(), iterator->getIdentifier(), sourceId->getIdentifier());
                     main.pushstr_newL(strBuffer);
                 }
             }
