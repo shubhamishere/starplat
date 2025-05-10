@@ -221,6 +221,18 @@ public:
         return pointTypeNode;
     }
 
+    static ASTNode *createUndirectedEdgeTypeNode(int typeId)
+    {
+        Type *undirEdgeTypeNode = Type::createForUndirectedEdgeType(typeId);
+        return undirEdgeTypeNode;
+    }
+
+    static ASTNode *createTriangleTypeNode(int typeId)
+    {
+        Type *triangleTypeNode = Type::createForTriangleType(typeId);
+        return triangleTypeNode;
+    }
+
     static ASTNode *createGraphTypeNode(int typeId, Identifier *targetGraph)
     {
         Type *typeNode = Type::createForGraphType(typeId, 2, targetGraph);

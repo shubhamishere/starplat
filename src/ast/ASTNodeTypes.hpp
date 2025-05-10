@@ -689,6 +689,29 @@ public:
     return type;
   }
 
+  static Type *createForUndirectedEdgeType(int typeIdSent)
+  {
+    Type *type = new Type();
+    type->typeId = typeIdSent;
+    return type;
+  }
+
+  static Type *createForTriangleType(int typeIdSent)
+  {
+    Type *type = new Type();
+    type->typeId = typeIdSent;
+    return type;
+  }
+
+  static Type *createForNodeType(int typeIdSent, int rootTypeSent)
+  {
+    Type *type = new Type();
+    type->typeId = typeIdSent;
+    type->rootType = rootTypeSent;
+    type->setTypeofNode(NODE_TYPE);
+    return type;
+  }
+
   static Type *createForGraphType(int typeIdSent, int rootTypeSent, Identifier *TargetGraphSent)
   {
     Type *type = new Type();
@@ -841,9 +864,24 @@ public:
     return check_isCollectionType(typeId);
   }
 
+  bool isStructType()
+  {
+    return check_isStructType(typeId);
+  }
+
   bool isPointType()
   {
     return check_isPointType(typeId);
+  }
+
+  bool isUndirectedEdgeType()
+  {
+    return check_isUndirectedEdgeType(typeId);
+  }
+
+  bool isTriangleType()
+  {
+    return check_isTriangleType(typeId);
   }
 
   bool isGraphType()

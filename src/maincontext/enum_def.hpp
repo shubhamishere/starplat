@@ -22,6 +22,8 @@ enum TYPE
   TYPE_UPDATES,
   TYPE_CONTAINER,
   TYPE_POINT,
+  TYPE_UNDIREDGE,
+  TYPE_TRIANGLE,
   TYPE_NODEMAP,
   TYPE_VECTOR,
   TYPE_HASHMAP,
@@ -95,10 +97,25 @@ inline bool check_isContainerType(int typeId)
 
   return typeId == TYPE_CONTAINER;
 }
+inline bool check_isStructType(int typeId)
+{
+
+  return (typeId == TYPE_POINT || typeId == TYPE_UNDIREDGE || typeId == TYPE_TRIANGLE);
+}
 inline bool check_isPointType(int typeId)
 {
 
   return typeId == TYPE_POINT;
+}
+inline bool check_isUndirectedEdgeType(int typeId)
+{
+
+  return typeId == TYPE_UNDIREDGE;
+}
+inline bool check_isTriangleType(int typeId)
+{
+
+  return typeId == TYPE_TRIANGLE;
 }
 inline bool check_isNodeMapType(int typeId)
 {

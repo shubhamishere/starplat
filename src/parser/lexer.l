@@ -133,6 +133,8 @@ NEGATE [-]
 "hashMap"  {printf("hashMap type"); return T_HASHMAP;}
 "hashSet"  {printf("hashSet type"); return T_HASHSET;}
 "Point" {printf("Point type"); return T_POINT;}
+"Edge" {printf("Undirected edge type"); return T_UNDIREDGE;}
+"Triangle" {printf("Triangle type"); return T_TRIANGLE;}
 "BTree"  {printf("btree type"); return T_BTREE;}
 
 
