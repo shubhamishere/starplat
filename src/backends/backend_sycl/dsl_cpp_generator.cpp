@@ -226,6 +226,11 @@ namespace spsycl
             char *parName = (*itr)->getIdentifier()->getIdentifier();
 
             main.pushString(" ");
+
+            if((*itr)->isByReference())
+                main.pushString("&");
+
+
             char str[80];
             strcpy(str, "d_");
             strcat(str, (*itr)->getIdentifier()->getIdentifier());

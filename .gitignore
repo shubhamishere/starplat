@@ -33,4 +33,4 @@ graphcode/generated_omp/*h
 .idea/
 *.o
 **/.DS_Store
-graphcode/sample_graphs/*
+graphcode/sample_graphs/*.DS_Store

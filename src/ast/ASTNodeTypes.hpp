@@ -721,6 +721,15 @@ public:
     return type;
   }
 
+  static Type *createForGNNType(int typeIdSent, int rootTypeSent, Identifier *TargetGraphSent)
+  {
+    Type *type = new Type();
+    type->typeId = typeIdSent;
+    type->rootType = rootTypeSent;
+    type->TargetGraph = TargetGraphSent;
+    return type;
+  }
+
   static Type *createForHeapType(int typeIdSent, int rootTypeSent)
   {
     Type *type = new Type();
@@ -888,6 +897,12 @@ public:
   {
     return check_isGraphType(typeId);
   }
+  
+  bool isGNNType()
+  {
+    return check_isGNNType(typeId);
+  }
+
   bool isPrimitiveType()
   {
     return check_isPrimitiveType(typeId);
@@ -1005,19 +1020,22 @@ class formalParam : public ASTNode
 private:
   Type *type;
   Identifier *identifier;
+  bool byReference; /* true if the parameter is passed by reference, false otherwise */
 
 public:
   formalParam()
   {
     type = NULL;
     identifier = NULL;
+    byReference = false;
   }
 
-  static formalParam *createFormalParam(Type *typeSent, Identifier *identifierSent)
+  static formalParam *createFormalParam(Type *typeSent, bool byRef, Identifier *identifierSent)
   {
     formalParam *formalPNode = new formalParam();
     formalPNode->type = typeSent;
     formalPNode->identifier = identifierSent;
+    formalPNode->byReference = byRef;
     formalPNode->setTypeofNode(NODE_FORMALPARAM);
 
     return formalPNode;
@@ -1031,6 +1049,11 @@ public:
   Identifier *getIdentifier()
   {
     return identifier;
+  }
+
+  bool isByReference()
+  {
+    return byReference;
   }
 };
 
