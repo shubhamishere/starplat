@@ -582,8 +582,13 @@ void dsl_cpp_generator::generateStatement(statement* stmt, bool isMainFile) {
   }
 
   if (stmt->getTypeofNode() == NODE_WHILESTMT) {
-    // generateWhileStmt((whileStmt*) stmt);
+    generateWhileStmt((whileStmt*) stmt, isMainFile);
   }
+
+
+  if(stmt->getTypeofNode() == NODE_SIMPLEFORSTMT){
+      generateSimpleForStmt((simpleForStmt*)stmt, isMainFile);
+    }
 
   if (stmt->getTypeofNode() == NODE_IFSTMT) {
     generateIfStmt((ifStmt*)stmt, isMainFile);
@@ -853,6 +858,64 @@ void dsl_cpp_generator::generateReductionStmt(reductionCallStmt* stmt,
     generateReductionOpStmt(stmt, isMainFile);
   }
 }
+
+  void dsl_cpp_generator::generateWhileStmt(whileStmt *whilestmt, bool isMainFile)
+  {
+    Expression *conditionExpr = whilestmt->getCondition();
+    dslCodePad &targetFile = isMainFile ? main : header;
+    targetFile.pushString("while(");
+    Expression *expr = conditionExpr;
+    generate_exprIdentifier(expr->getId(), isMainFile);
+    // printf("Inside the while loop\n");
+    targetFile.pushString("){\n");
+    generateStatement(whilestmt->getBody(), isMainFile);
+    targetFile.pushString("\n}");
+  }
+
+void dsl_cpp_generator::generateSimpleForStmt(simpleForStmt *simpleFor, bool isMainFile) {
+  Type *primitiveType = simpleFor->getPrimitiveType();
+  Identifier *loopVariable = simpleFor->getLoopVariable();
+  Expression *rhs = simpleFor->getRhs();
+  Expression *iterCondition = simpleFor->getIterCondition();
+  Expression *updateExpression = simpleFor->getUpdateExpression();
+  blockStatement *body = simpleFor->getBody();
+  dslCodePad &targetFile = isMainFile ? main : header;
+printf("Im inside the forrrrrrrrrrrrr loopn\n");
+
+// printf("Checking primitiveType...\n");
+// if (!primitiveType) { printf("primitiveType is NULL!\n"); return; }
+
+// printf("Checking loopVariable...\n");
+// if (!loopVariable) { printf("loopVariable is NULL!\n"); return; }
+
+// printf("Checking rhs...\n");
+// if (!rhs) { printf("rhs is NULL!\n"); return; }
+
+// printf("Checking iterCondition...\n");
+// if (!iterCondition) { printf("iterCondition is NULL!\n"); return; }
+
+// printf("Checking updateExpression...\n");
+// if (!updateExpression) { printf("updateExpression is NULL!\n"); return; }
+
+// printf("Checking body...\n");
+// if (!body) { printf("body is NULL!\n"); return; }
+
+// printf("<ALL checkedn\n");
+
+
+  targetFile.pushString("for (");
+  generateVariableDecl(declaration::assign_Declaration(primitiveType, loopVariable, rhs), isMainFile);
+  // main.pushString("; ");
+  
+  generateExpr(iterCondition,isMainFile);
+  targetFile.pushString("; ");
+  generateExpr(updateExpression,isMainFile);
+  targetFile.pushstr_newL(") {\n");
+  generateStatement(body,isMainFile);
+      targetFile.pushstr_newL("\n}\n");
+
+}
+
 
 void dsl_cpp_generator::generateDoWhileStmt(dowhileStmt* doWhile,
                                             bool isMainFile) {

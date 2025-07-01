@@ -313,7 +313,8 @@ property : T_NP '<' primitive '>' { $$=Util::createPropertyTypeNode(TYPE_PROPNOD
 			                         $$=Util::createPropertyTypeNode(TYPE_PROPNODE, type); }	
 
 assignment :  leftSide '=' rhs  { printf("testassign\n");$$=Util::createAssignmentNode($1,$3);};
-              | indexExpr '=' rhs {printf ("called assign for count\n") ; $$=Util::createAssignmentNode($1 , $3);};        
+              | indexExpr '=' rhs {printf ("called assign for count\n") ; $$=Util::createAssignmentNode($1 , $3);};    
+			  | id '=' expression  { $$ = Util::createAssignmentNode($1, $3); };    
 
 
 rhs : expression { $$=$1;};
@@ -397,6 +398,7 @@ iteration_cf : T_FIXEDPOINT T_UNTIL '(' id ':' expression ')' blockstatements { 
 		| T_FOR '(' id T_IN id '.' proc_call  filterExpr')' blockstatements {$$=Util::createNodeForForAllStmt($3,$5,$7,$8,$10,false);};
 		| T_FOR '(' id T_IN indexExpr ')' blockstatements {$$ = Util::createNodeForForStmt($3, $5, $7, false);};
 		| T_FORALL '(' id T_IN indexExpr ')' blockstatements {$$ = Util::createNodeForForStmt($3, $5, $7, true);};
+		| T_FOR '(' primitive id '=' rhs ';' boolean_expr ';' expression ')' blockstatements {$$ = Util::createNodeForSimpleForStmt($3, $4, $6, $8, $10, $12); };
 
 filterExpr  :         { $$=NULL;};
             |'.' T_FILTER '(' boolean_expr ')'{ $$=$4;};

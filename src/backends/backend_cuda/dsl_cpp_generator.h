@@ -71,7 +71,8 @@ class dsl_cpp_generator {
   void generateStatement(statement* stmt, bool isMainFile);
   // void generateAssignmentStmt(assignment* assignStmt);
   void generateAssignmentStmt(assignment* assignStmt, bool isMainFile);
-  void generateWhileStmt(whileStmt* whilestmt);
+  void generateWhileStmt(whileStmt* whilestmt, bool isMainfile);
+  void generateSimpleForStmt(simpleForStmt* forstmt, bool isMainFile);
   void generateForAll(forallStmt* forAll, bool isMainFile);
   void generateFixedPoint(fixedPointStmt* fixedPoint, bool isMainFile);
   void generateIfStmt(ifStmt* ifstmt, bool isMainFile);
