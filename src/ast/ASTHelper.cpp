@@ -512,6 +512,14 @@ public:
         whileStmtNode = whileStmt::create_whileStmt((Expression *)iterCondition, (blockStatement *)body);
         return whileStmtNode;
     }
+    static ASTNode *createNodeForSimpleForStmt(ASTNode *primitiveType, ASTNode *loopVariable, ASTNode *rhs, ASTNode *iterCondition, ASTNode *updateExpression, ASTNode *body)
+    {
+        statement* simpleForStmtNode;
+        printf("Inside createNodeForSimpleForStmt\n");
+        simpleForStmtNode = simpleForStmt::createSimpleForStmt((Type*)primitiveType, (Identifier*)loopVariable, (Expression*)rhs, (Expression*)iterCondition, (Expression*)updateExpression, (blockStatement*)body);
+        return simpleForStmtNode;
+    }
+
     static ASTNode *createNodeForDoWhileStmt(ASTNode *iterCondition, ASTNode *body)
     {
         statement *dowhileStmtNode;

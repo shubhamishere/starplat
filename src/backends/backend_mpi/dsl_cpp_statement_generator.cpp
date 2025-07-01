@@ -710,6 +710,13 @@ namespace spmpi
             std::cout << "<- 4" << std::endl;
         }
 
+        if (stmt->getTypeofNode() == NODE_SIMPLEFORSTMT)
+        {
+            std::cout << "-> 4.1" << std::endl;
+            generateSimpleForStmt((simpleForStmt *)stmt);
+            std::cout << "<- 4.1" << std::endl;
+        }
+
         if (stmt->getTypeofNode() == NODE_IFSTMT)
         {
             std::cout << "-> 5" << std::endl;
@@ -1440,5 +1447,23 @@ namespace spmpi
         generateExpr(conditionExpr);
         main.pushString(" )");
         generateStatement(whilestmt->getBody());
+    }
+
+    void dsl_cpp_generator::generateSimpleForStmt(simpleForStmt *simpleFor)
+    {
+        Type *primitiveType = simpleFor->getPrimitiveType();
+        Identifier *loopVariable = simpleFor->getLoopVariable();
+        Expression *rhs = simpleFor->getRhs();
+        Expression *iterCondition = simpleFor->getIterCondition();
+        Expression *updateExpression = simpleFor->getUpdateExpression();
+        blockStatement *body = simpleFor->getBody();
+        main.pushString("for (");
+        generateVariableDecl(declaration::assign_Declaration(primitiveType, loopVariable, rhs));
+        generateExpr(iterCondition);
+        main.pushString("; ");
+        generateExpr(updateExpression);
+        main.pushstr_newL(") {\n");
+        generateStatement(body);
+        main.pushstr_newL("\n}\n");
     }
 }
