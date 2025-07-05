@@ -1,3 +1,6 @@
+#ifndef STARPLAT_GRAPH_H
+#define STARPLAT_GRAPH_H
+
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -55,6 +58,12 @@ public:
   std::map<int, int> outDeg;
   std::map<int, int> inDeg;
 
+  ~graph(){
+    if (edgeLen) delete[] edgeLen;
+    if (edgeList) delete[] edgeList;
+    if (srcList) delete[] srcList;
+  }
+
   graph(char *file)
   {
     filePath = file;
@@ -65,6 +74,56 @@ public:
     diff_rev_indexofNodes = NULL;
     diff_rev_edgeList = NULL;
     rev_edgeLen = NULL;
+  }
+
+  graph copyGraph(){
+    graph g_copy((char*)"");
+    g_copy.nodesTotal = nodesTotal;
+    g_copy.edgesTotal = edgesTotal;
+
+    if (edgeLen) {
+      g_copy.edgeLen = new int32_t[edgesTotal];
+      std::copy(edgeLen, edgeLen + edgesTotal, g_copy.edgeLen);
+    } else {
+      g_copy.edgeLen = nullptr;
+    }
+
+    if (filePath) {
+      g_copy.filePath = strdup(filePath);
+    } else {
+      g_copy.filePath = nullptr;
+    }
+
+    g_copy.edges = edges;
+
+    if (indexofNodes) {
+      g_copy.indexofNodes = new int32_t[nodesTotal + 2];
+      std::copy(indexofNodes, indexofNodes + nodesTotal + 2, g_copy.indexofNodes);
+    } else {
+      g_copy.indexofNodes = nullptr;
+    }
+
+
+    if (edgeList) {
+      g_copy.edgeList = new int32_t[edgesTotal];
+      std::copy(edgeList, edgeList + edgesTotal, g_copy.edgeList);
+    } else {
+      g_copy.edgeList = nullptr;
+    }
+
+    if (srcList) {
+      g_copy.srcList = new int32_t[edgesTotal];
+      std::copy(srcList, srcList + edgesTotal, g_copy.srcList);
+    } else {
+      g_copy.srcList = nullptr;
+    }
+
+    g_copy.graph_edge = graph_edge;
+
+    g_copy.outDeg = outDeg;
+    g_copy.inDeg = inDeg;
+
+    return g_copy;
   }
 
   std::map<int, std::vector<edge>> getEdges()
@@ -1081,6 +1140,22 @@ public:
 
     return mstGraph;
 }
+  void setNodes(int nodes){
+    this->nodesTotal=nodes;
+  }
+
+  void printGraph()
+  {
+    for (int i = 0; i < nodesTotal; i++)
+    {
+      std::cout << "Node " << i << ": ";
+      for (edge e : getNeighbors(i))
+      {
+        std::cout << "(" << e.destination << ", " << e.weight << ") ";
+      }
+      std::cout << std::endl;
+    }
+  }
 
 
 //Function to sample specified number of neighbors of a node in O(Sample Size) time.
@@ -1206,7 +1281,7 @@ class GNN
     // }
 
 
-    double compute_accuracy()
+    double compute_accuracy() 
     {
       #ifdef __CUDACC__
          compute_accuracy_cuda();
@@ -1224,3 +1299,5 @@ class GNN
       #endif
     }
 };
+
+#endif
