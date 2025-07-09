@@ -2,6 +2,16 @@
 
 One of the biggest advantages of this program is its portability. It has very few external dependencies, making it easy to run on different machines.
 
+## How to run
+```visual-basic
+deno run --unstable-webgpu --allow-read triangle_counter.js ./path/to/graph.txt
+```
+
+for example:
+```visual-basic
+deno run --unstable-webgpu --allow-read triangle_counter.js ./sample_graphs/roadNet-CA.txt
+```
+
 ## Requirements
 
 ### 1. Deno Runtime
