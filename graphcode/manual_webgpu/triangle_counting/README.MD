@@ -9,7 +9,7 @@ deno run --unstable-webgpu --allow-read triangle_counter.js ./path/to/graph.txt
 
 for example:
 ```visual-basic
-deno run --unstable-webgpu --allow-read triangle_counter.js ./sample_graphs/roadNet-CA.txt
+deno run --unstable-webgpu --allow-read triangle_counter.js /Users/shubham.pandey/Documents/IITM/PACE/webgpu_deno_triangle_counting/sample_graphs_SNAP/roadNet-CA.txt
 ```
 
 ## Requirements
