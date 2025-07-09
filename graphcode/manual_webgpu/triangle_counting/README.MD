@@ -21,7 +21,7 @@ The machine must have a modern GPU and up-to-date graphics drivers that support 
 
 * **DirectX 12** (on Windows)
 
-On any modern computer or supercomputing cluster, these drivers are typically pre-installed and managed by the system.
+On any modern computer or supercomputing cluster like IITM - Aquacluster, these drivers are typically pre-installed and managed by the system.
 
 ## What You Don't Need
 
