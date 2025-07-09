@@ -7,7 +7,7 @@ import { DelimiterStream } from "jsr:@std/streams/delimiter-stream";
 async function main() {
   const filePath = Deno.args[0];
   if (!filePath) {
-    console.error("❌ Please provide the path to the graph file.");
+    console.error(" Please provide the path to the graph file.");
     return;
   }
 
