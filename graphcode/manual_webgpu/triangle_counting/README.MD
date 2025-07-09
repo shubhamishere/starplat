@@ -21,7 +21,7 @@ brew install deno
 
 ### 2. GPU and Drivers
 
-The machine must have a modern GPU and up-to-date graphics drivers that support one of the following APIs:
+The machine must have a modern GPU like Nvidia, AMD, Intel or Apple silicon and up-to-date graphics drivers that support one of the following APIs:
 
 * **Vulkan** (on Linux)
 
