@@ -10,7 +10,15 @@ This is the **only piece of software you need to install**. [Deno](https://docs.
 
 You can install it on any Linux, Mac, or Windows machine with a single command:
 
+```visual-basic
 curl -fsSL https://deno.land/x/install/install.sh | sh
+```
+or On macOS (using Homebrew)
+If you have Homebrew installed:
+```visual-basic
+brew install deno
+```
+
 ### 2. GPU and Drivers
 
 The machine must have a modern GPU and up-to-date graphics drivers that support one of the following APIs:
