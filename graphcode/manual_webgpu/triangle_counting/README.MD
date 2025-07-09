@@ -1,4 +1,4 @@
-# Triangle Counting with Deno and WebGPU
+# Triangle Counting with WebGPU and Deno javascript
 
 One of the biggest advantages of this program is its portability. It has very few external dependencies, making it easy to run on different machines.
 
@@ -6,7 +6,7 @@ One of the biggest advantages of this program is its portability. It has very fe
 
 ### 1. Deno Runtime
 
-This is the **only piece of software you need to install**. Deno acts as the all-in-one environment that runs our JavaScript code, understands the WebGPU API, and manages the program.
+This is the **only piece of software you need to install**. [Deno](https://docs.deno.com/runtime/) acts as the all-in-one environment that runs our JavaScript code, understands the WebGPU API, and manages the program.
 
 You can install it on any Linux, Mac, or Windows machine with a single command:
 
