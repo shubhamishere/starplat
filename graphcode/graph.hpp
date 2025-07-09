@@ -5,14 +5,18 @@
 #include <set>
 #include <map>
 #include <algorithm>
-#include <string.h>
+#include <string>
 #include <climits>
 #include<cmath>
 #include <random>
 #include <unordered_set>
 #include "graph_ompv2.hpp"
+#include "OMP_GNN.hpp"
 
-// using namespace std;
+#ifdef __CUDACC__
+#include "CUDA_GNN.cuh"
+#endif
+
 
 class edge
 {
@@ -1046,7 +1050,7 @@ struct Edge
 
   Edge() {};
   Edge(int p1, int p2) : p1(p1), p2(p2) {};
-}
+};
 
 struct Triangle
 {
@@ -1056,4 +1060,44 @@ struct Triangle
 
   Triangle() {};
   Triangle(int p1, int p2, int p3) : p1(p1), p2(p2), p3(p3) {};
+};
+
+class GNN
+{
+  public:
+    GNN(){};
+
+    void init(const std:: vector<int> neuronsPerLayer, std::string initWeights="Xaviers",std::string folderPath){
+
+      #ifdef __CUDACC__
+        init_cuda(neuronsPerLayer, initWeights , folderPath);
+      #else
+        init_omp(neuronsPerLayer, initWeights , folderPath);
+      #endif
+    }
+
+    void forward(std::string modelType, std::string aggregationType){
+      #ifdef __CUDACC__
+        forward_cuda(modelType, aggregationType);
+      #else
+        forward_omp(modelType, aggregationType);
+      #endif
+    }
+
+    void backward(std::string modelType, std::string aggregationType, int epoch){
+      #ifdef __CUDACC__
+        backprop_cuda(modelType, aggregationType, epoch);
+      #else
+        backward_omp(modelType, aggregationType, epoch);
+      #endif
+    }
+
+    // void optimizer(std::string optimizerType, double learningRate){
+    //   #ifdef __CUDACC__
+    //     optimizer_cuda(optimizerType, learningRate);
+    //   #else
+    //     optimizer_omp(optimizerType, learningRate);
+    //   #endif
+    // }
+
 };
