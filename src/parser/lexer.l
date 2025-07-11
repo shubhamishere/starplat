@@ -29,6 +29,7 @@ NEGATE [-]
 "float"   {printf("Type: %s", yytext);  return T_FLOAT;}
 "double"  {printf("Type: %s", yytext);  return T_DOUBLE;}
 "bool"    {printf("Type: %s", yytext);  return T_BOOL;}
+"string" {printf("Type: %s",yytext); return T_STRING;}
 "auto&"    {printf("Type: %s", yytext);  return T_AUTOREF;}
 
 "forall"  {printf("Keyword-forall: %s", yytext); return T_FORALL;}
