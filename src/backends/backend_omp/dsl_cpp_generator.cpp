@@ -41,7 +41,7 @@ namespace spomp
     header.pushString("#include");
     addIncludeToFile("atomic", header, true);
     header.pushString("#include");
-    addIncludeToFile("../GNN_Suite/JV_GNN_omp.cpp", header, false);
+    addIncludeToFile("../OMP_GNN.hpp", header, false);
     header.pushString("#include");
     addIncludeToFile("BTree.h", header, false);
     // header.pushString("#include");
@@ -959,6 +959,9 @@ namespace spomp
       break;
     case TYPE_BOOL:
       main.pushstr_space("false");
+    case TYPE_STRING:
+      main.pushstr_space("\"\"");
+      break;
     default:
       assert(false);
       return;
@@ -1833,6 +1836,9 @@ namespace spomp
     case EXPR_BOOLCONSTANT:
       sprintf(valBuffer, "%s", expr->getBooleanConstant() ? "true" : "false");
       break;
+    case EXPR_STRINGCONSTANT:
+      sprintf(valBuffer, "%s", expr->getStringConstant().c_str());
+      break;
     default:
       assert(false);
 
@@ -2338,7 +2344,9 @@ namespace spomp
       if (objectId != NULL)
       {
         cout << "isnide here 1" << endl;
+
         Identifier *id2 = proc->getId2();
+       
         if (id2 != NULL)
         {
 
@@ -2727,6 +2735,8 @@ namespace spomp
         return "int";
       case TYPE_EDGE:
         return "int";
+      case TYPE_STRING:
+        return "std::string";
       default:
         assert(false);
       }
@@ -2750,6 +2760,8 @@ namespace spomp
           return "float*";
         case TYPE_DOUBLE:
           return "double*";
+        case TYPE_STRING:
+          return "string";
         default:
           assert(false);
         }

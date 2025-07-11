@@ -69,6 +69,8 @@
 %token <fval> FLOAT_NUM
 %token <bval> BOOL_VAL
 %token <cval> CHAR_VAL
+%token <text> STRING_VAL
+
 
 %type <node> function_def function_data  return_func function_body param
 %type <pList> paramList
@@ -380,6 +382,7 @@ proc_call : leftSide '(' arg_list ')' {
 val : INT_NUM { $$ = Util::createNodeForIval($1); };
 	| FLOAT_NUM {$$ = Util::createNodeForFval($1);};
 	| BOOL_VAL { $$ = Util::createNodeForBval($1);};
+	| STRING_VAL { $$ = Util::createNodeForSval($1);};
 	| T_INF {$$=Util::createNodeForINF(true);};
 	| T_P_INF {$$=Util::createNodeForINF(true);};
 	| T_N_INF {$$=Util::createNodeForINF(false);};

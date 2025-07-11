@@ -1,5 +1,8 @@
 DIGIT       [0-9]
 ALPHANUM    [a-zA-Z][a-zA-Z0-9_]*
+STRING  \"[^\"\n]*\"
+
+
 WS  [ \t\v\n\f]
 NEGATE [-]
 
@@ -146,6 +149,7 @@ NEGATE [-]
                         return FLOAT_NUM;}
 {NEGATE}*{DIGIT}{DIGIT}*     {  yylval.ival=atoi(yytext);
                             return INT_NUM;}
+{STRING}            { yylval.text=yytext; printf("HELLO STRING %s",yytext); return STRING_VAL;}
 
 [ \n\t]	{ printf("\n");}
 {WS}+					{ /* whitespace separates tokens */ }

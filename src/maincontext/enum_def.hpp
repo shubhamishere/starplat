@@ -9,6 +9,7 @@ enum TYPE
   TYPE_BOOL,
   TYPE_FLOAT,
   TYPE_DOUBLE,
+  TYPE_STRING,
   TYPE_GRAPH,
   TYPE_GNN,
   TYPE_DIRGRAPH,
@@ -49,10 +50,12 @@ inline bool check_isCollectionType(int typeId)
 }
 inline bool check_isGraphType(int typeId)
 {
+  printf("check_isGraphType called with typeId: %d\n", typeId);
   return ((typeId == TYPE_GRAPH) || (typeId == TYPE_DIRGRAPH));
 }
 inline bool check_isGNNType(int typeId)
 {
+  printf("check_isGNNType called with typeId: %d\n", typeId);
   return ((typeId==TYPE_GNN));
 }
 inline bool check_isHeapType(int typeId)
@@ -69,7 +72,7 @@ inline bool check_isBTreeType(int typeId)
 }
 inline bool check_isPrimitiveType(int typeId)
 {
-  return ((typeId == TYPE_BOOL) || (typeId == TYPE_DOUBLE) || (typeId == TYPE_FLOAT) || (typeId == TYPE_LONG) || (typeId == TYPE_INT) || (typeId == TYPE_AUTOREF));
+  return ((typeId == TYPE_BOOL) || (typeId == TYPE_DOUBLE) || (typeId == TYPE_FLOAT) || (typeId == TYPE_LONG) || (typeId == TYPE_INT) || (typeId == TYPE_AUTOREF)||(typeId == TYPE_STRING));
 }
 
 inline bool check_isPropNodeType(int typeId)
@@ -227,6 +230,7 @@ enum EXPR
   EXPR_INTCONSTANT,
   EXPR_LONGCONSTANT,
   EXPR_DOUBLECONSTANT,
+  EXPR_STRINGCONSTANT,
   EXPR_FLOATCONSTANT,
   EXPR_ID,
   EXPR_PROPID,

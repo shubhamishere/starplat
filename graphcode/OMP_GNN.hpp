@@ -618,6 +618,17 @@ void backprop_omp(std::string modelType, std::string aggregationType,int epoch)
 }
 
 
+void compute_loss_omp()
+{
+    double loss = compute_loss();
+    std::cout << "Loss: " << loss << std::endl;
+}
+
+void compute_accuracy_omp()
+{
+    double accuracy = compute_accuracy();
+    std::cout << "Accuracy: " << accuracy << std::endl;
+}
 
 // void test(graph& g , std::vector<int> neuronsPerLayer , int totalEpochs)
 // {

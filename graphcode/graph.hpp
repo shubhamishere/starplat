@@ -1067,7 +1067,7 @@ class GNN
   public:
     GNN(){};
 
-    void init(const std:: vector<int> neuronsPerLayer, std::string initWeights="Xaviers",std::string folderPath){
+    void init(std:: vector<int> neuronsPerLayer, std::string initWeights,std::string folderPath){
 
       #ifdef __CUDACC__
         init_cuda(neuronsPerLayer, initWeights , folderPath);
@@ -1088,7 +1088,7 @@ class GNN
       #ifdef __CUDACC__
         backprop_cuda(modelType, aggregationType, epoch);
       #else
-        backward_omp(modelType, aggregationType, epoch);
+        backprop_omp(modelType, aggregationType, epoch);
       #endif
     }
 
@@ -1100,4 +1100,22 @@ class GNN
     //   #endif
     // }
 
+
+    void compute_accuracy()
+    {
+      #ifdef __CUDACC__
+        compute_accuracy_cuda();
+      #else
+        compute_accuracy_omp();
+      #endif
+    }
+
+    void compute_loss()
+    {
+      #ifdef __CUDACC__
+        compute_loss_cuda();
+      #else
+        compute_loss_omp();
+      #endif
+    }
 };
