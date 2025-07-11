@@ -1070,6 +1070,7 @@ private:
   double floatConstant;
   bool booleanConstant;
   char charConstant;
+  string stringConstant;
   bool infinityType;
   int operatorType;
   int typeofExpr;
@@ -1187,6 +1188,14 @@ public:
     return boolExpr;
   }
 
+  static Expression *nodeForStringConstant(char *stringValue)
+  {
+    Expression *stringConstantExpr = new Expression();
+    stringConstantExpr->stringConstant = stringValue;
+    stringConstantExpr->typeofExpr = EXPR_STRINGCONSTANT;
+    return stringConstantExpr;
+  }
+
   static Expression *nodeForInfinity(bool infinityValue)
   {
     Expression *infinityExpr = new Expression();
@@ -1247,7 +1256,7 @@ public:
   bool isLiteral()
   {
     return (typeofExpr == EXPR_BOOLCONSTANT || typeofExpr == EXPR_INTCONSTANT ||
-            typeofExpr == EXPR_FLOATCONSTANT);
+            typeofExpr == EXPR_FLOATCONSTANT || typeofExpr == EXPR_STRINGCONSTANT);
   }
   bool isInfinity()
   {
@@ -1315,6 +1324,11 @@ public:
   double getFloatConstant()
   {
     return floatConstant;
+  }
+
+  string getStringConstant()
+  {
+    return stringConstant;
   }
 
   bool isPositiveInfinity()

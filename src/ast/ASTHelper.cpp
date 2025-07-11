@@ -442,6 +442,13 @@ public:
         return exprBVal;
     }
 
+    static ASTNode* createNodeForSval(char *value)
+{
+    Expression* exprSVal=Expression::nodeForStringConstant(value);
+    return exprSVal;
+}
+
+
     static ASTNode *createNodeForINF(bool infinityFlag)
     {
         Expression *exprINFVal = Expression::nodeForInfinity(infinityFlag);
@@ -519,7 +526,6 @@ public:
         simpleForStmtNode = simpleForStmt::createSimpleForStmt((Type*)primitiveType, (Identifier*)loopVariable, (Expression*)rhs, (Expression*)iterCondition, (Expression*)updateExpression, (blockStatement*)body);
         return simpleForStmtNode;
     }
-
     static ASTNode *createNodeForDoWhileStmt(ASTNode *iterCondition, ASTNode *body)
     {
         statement *dowhileStmtNode;

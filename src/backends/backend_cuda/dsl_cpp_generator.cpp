@@ -2320,6 +2320,9 @@ void dsl_cpp_generator::generate_exprLiteral(Expression* expr,
     case EXPR_BOOLCONSTANT:
       sprintf(valBuffer, "%s", expr->getBooleanConstant() ? "true" : "false");
       break;
+    case EXPR_STRINGCONSTANT:
+      sprintf(valBuffer, "%s", expr->getStringConstant().c_str());
+      break;
     default:
       assert(false);
 
@@ -3220,6 +3223,8 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
         return "float";
       case TYPE_DOUBLE:
         return "double";
+      case TYPE_STRING:
+        return "std::string";
       case TYPE_NODE:
         return "int";
       case TYPE_EDGE:
@@ -3249,10 +3254,15 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
     }
   } else if (type->isNodeEdgeType()) {
     return "int";  // need to be modified.
-
-  } else if (type->isGraphType()) {
+      }
+    else if (type->isGNNType()){
+      
+      return "GNN ";
+    }
+ else if (type->isGraphType()) {
     return "graph&";
-  } else if (type->isCollectionType()) {
+  } 
+  else if (type->isCollectionType()) {
     int typeId = type->gettypeId();
 
     switch (typeId) {
@@ -3262,7 +3272,7 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
 	  case TYPE_CONTAINER:
       {
 		char* newS = new char[1024];
-		string vecString = "thrust::host_vector<";   
+		string vecString = "std::vector<";   
 
 		char* valType = (char*)convertToCppType(type->getInnerTargetType());
 		string innerString = valType;

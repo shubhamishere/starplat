@@ -203,6 +203,8 @@ struct GCNContext
     std::vector<double *> m_d;
     std::vector<double *> v_d;
     int *labels_d = nullptr;
+    double accuracy = 0.0;
+    double loss = 0.0;
 };
 
 extern GCNContext gcn_ctx;
@@ -671,6 +673,18 @@ void cleanup_cuda()                             //This function cleans up the al
     cusparseDestroy(gcn_ctx.sp_handle);
 }
 
+
+
+void compute_loss_cuda(){
+    gcn_ctx.loss = compute_loss_and_accuracy_cuda(gcn_ctx.Z_d[gcn_ctx.layer_dims.size() - 2],gcn_ctx.labels_d,gcn_ctx.num_nodes,gcn_ctx.layer_dims.back(),gcn_ctx.accuracy);
+    std::cout << "Loss: " << gcn_ctx.loss << std::endl;
+}
+
+void compute_accuracy_cuda(){
+    gcn_ctx.accuracy = 0.0;
+    compute_loss_and_accuracy_cuda(gcn_ctx.Z_d[gcn_ctx.layer_dims.size() - 2], gcn_ctx.labels_d, gcn_ctx.num_nodes, gcn_ctx.layer_dims.back(), gcn_ctx.accuracy);
+    std::cout << "Accuracy: " << gcn_ctx.accuracy * 100.0 << "%" << std::endl;
+}
 
 // void print_cuda_info()               //This function prints information about the CUDA devices may or may not be useful but very helpful if you are using large graphs. 
 // {

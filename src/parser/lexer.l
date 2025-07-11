@@ -1,5 +1,8 @@
 DIGIT       [0-9]
 ALPHANUM    [a-zA-Z][a-zA-Z0-9_]*
+STRING  \"[^\"\n]*\"
+
+
 WS  [ \t\v\n\f]
 NEGATE [-]
 
@@ -26,6 +29,7 @@ NEGATE [-]
 "float"   {printf("Type: %s", yytext);  return T_FLOAT;}
 "double"  {printf("Type: %s", yytext);  return T_DOUBLE;}
 "bool"    {printf("Type: %s", yytext);  return T_BOOL;}
+"string" {printf("Type: %s",yytext); return T_STRING;}
 "auto&"    {printf("Type: %s", yytext);  return T_AUTOREF;}
 
 "forall"  {printf("Keyword-forall: %s", yytext); return T_FORALL;}
@@ -146,6 +150,7 @@ NEGATE [-]
                         return FLOAT_NUM;}
 {NEGATE}*{DIGIT}{DIGIT}*     {  yylval.ival=atoi(yytext);
                             return INT_NUM;}
+{STRING}            { yylval.text=yytext; printf("HELLO STRING %s",yytext); return STRING_VAL;}
 
 [ \n\t]	{ printf("\n");}
 {WS}+					{ /* whitespace separates tokens */ }

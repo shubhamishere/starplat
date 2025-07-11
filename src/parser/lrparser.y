@@ -49,7 +49,7 @@
 	ASTNodeList* nodeList;
     tempNode* temporary;
      }
-%token T_INT T_FLOAT T_BOOL T_DOUBLE  T_LONG  T_AUTOREF
+%token T_INT T_FLOAT T_BOOL T_DOUBLE T_STRING T_LONG  T_AUTOREF
 %token T_FORALL T_FOR  T_P_INF  T_INF T_N_INF
 %token T_FUNC T_IF T_ELSE T_WHILE T_RETURN T_DO T_IN T_FIXEDPOINT T_UNTIL T_FILTER
 %token T_ADD_ASSIGN T_SUB_ASSIGN T_MUL_ASSIGN T_DIV_ASSIGN T_MOD_ASSIGN T_AND_ASSIGN T_XOR_ASSIGN
@@ -69,6 +69,8 @@
 %token <fval> FLOAT_NUM
 %token <bval> BOOL_VAL
 %token <cval> CHAR_VAL
+%token <text> STRING_VAL
+
 
 %type <node> function_def function_data  return_func function_body param
 %type <pList> paramList
@@ -255,6 +257,7 @@ primitive: T_INT { $$=Util::createPrimitiveTypeNode(TYPE_INT);};
 	| T_BOOL { $$=Util::createPrimitiveTypeNode(TYPE_BOOL);};
 	| T_DOUBLE { $$=Util::createPrimitiveTypeNode(TYPE_DOUBLE); };
     | T_LONG {$$=$$=Util::createPrimitiveTypeNode(TYPE_LONG);};
+	| T_STRING {$$=$$=Util::createPrimitiveTypeNode(TYPE_STRING);};
 
 type3: T_AUTOREF { $$=Util::createPrimitiveTypeNode(TYPE_AUTOREF);};	
 
@@ -380,6 +383,7 @@ proc_call : leftSide '(' arg_list ')' {
 val : INT_NUM { $$ = Util::createNodeForIval($1); };
 	| FLOAT_NUM {$$ = Util::createNodeForFval($1);};
 	| BOOL_VAL { $$ = Util::createNodeForBval($1);};
+	| STRING_VAL { $$ = Util::createNodeForSval($1);};
 	| T_INF {$$=Util::createNodeForINF(true);};
 	| T_P_INF {$$=Util::createNodeForINF(true);};
 	| T_N_INF {$$=Util::createNodeForINF(false);};
