@@ -136,6 +136,8 @@ void dsl_cpp_generator::generation_begin() {
   header.pushString("#include ");
   //addIncludeToFile("../libcuda.cuh", header, false);
   addIncludeToFile("../dynamic_mst_delete_cuda/libcuda.cuh", header, false);
+  header.pushString("#include ");
+  addIncludeToFile("../CUDA_GNN.cuh", header, false);
 
   header.pushstr_newL("#include <cooperative_groups.h>");
   //header.pushstr_newL("graph &g = NULL;");  //temporary fix - to fix the PageRank graph g instance
@@ -2298,6 +2300,12 @@ void dsl_cpp_generator::generateVariableDecl(declaration* declStmt,
 
 	  main.pushstr_newL(";");
 }
+      else if (type->isGNNType())
+    {
+       main.pushstr_space(convertToCppType(type));
+       main.pushString(declStmt->getdeclId()->getIdentifier());
+       main.pushstr_newL(";");
+    }
 }
 
 void dsl_cpp_generator::generate_exprLiteral(Expression* expr,
@@ -3256,7 +3264,7 @@ const char* dsl_cpp_generator::convertToCppType(Type* type) {
     return "int";  // need to be modified.
       }
     else if (type->isGNNType()){
-      
+      printf("GNN type found\n");
       return "GNN ";
     }
  else if (type->isGraphType()) {

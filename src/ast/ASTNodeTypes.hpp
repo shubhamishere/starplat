@@ -900,6 +900,7 @@ public:
   
   bool isGNNType()
   {
+    printf("isGNNType called with typeId: %d\n", typeId);
     return check_isGNNType(typeId);
   }
 

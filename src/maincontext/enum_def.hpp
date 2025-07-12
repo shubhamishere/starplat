@@ -1,7 +1,6 @@
 /*enum for various graph characteristics*/
 #ifndef ENUMDEF_H
 #define ENUMDEF_H
-
 enum TYPE
 {
   TYPE_LONG,
@@ -50,12 +49,10 @@ inline bool check_isCollectionType(int typeId)
 }
 inline bool check_isGraphType(int typeId)
 {
-  printf("check_isGraphType called with typeId: %d\n", typeId);
   return ((typeId == TYPE_GRAPH) || (typeId == TYPE_DIRGRAPH));
 }
 inline bool check_isGNNType(int typeId)
 {
-  printf("check_isGNNType called with typeId: %d\n", typeId);
   return ((typeId==TYPE_GNN));
 }
 inline bool check_isHeapType(int typeId)

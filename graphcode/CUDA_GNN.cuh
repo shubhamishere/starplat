@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <vector>
 #include <string>
@@ -8,8 +9,6 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
-
-#include <omp.h>
 #include <set>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
@@ -165,7 +164,7 @@ __global__ void relu_derivative_kernel(const double *z, const double *dh, double
 
 // Kernel implementaiton ends here
 
-struct GCNContext
+struct GCNContext_CUDA
 {
     cusparseHandle_t sp_handle;
     cublasHandle_t bl_handle;
@@ -207,12 +206,12 @@ struct GCNContext
     double loss = 0.0;
 };
 
-extern GCNContext gcn_ctx;
+extern GCNContext_CUDA gcn_ctx_cuda_cuda;
+GCNContext_CUDA gcn_ctx_cuda; // Global context for GCN
 
-GCNContext gcn_ctx;
 
 // Reading fucntions implementation starts here
-void read_graph(const std::string &filename, std::vector<int> &row_ptr, std::vector<int> &col_idx, std::vector<double> &edgeweights, int &num_nodes)
+void read_graph_omp(const std::string &filename, std::vector<int> &row_ptr, std::vector<int> &col_idx, std::vector<double> &edgeweights, int &num_nodes)
 {
     std::ifstream file(filename);
     std::string line;
@@ -253,11 +252,11 @@ void read_graph(const std::string &filename, std::vector<int> &row_ptr, std::vec
     }
     edgeweights.resize(col_idx.size(), 1.0); //
     std::cout << "Read Graph: Nodes=" << num_nodes << ", Edges=" << col_idx.size() << std::endl;
-    gcn_ctx.num_nodes = num_nodes;
-    gcn_ctx.num_edges = col_idx.size();
+    gcn_ctx_cuda.num_nodes = num_nodes;
+    gcn_ctx_cuda.num_edges = col_idx.size();
 }
 
-void read_features(const std::string &filename, std::vector<double> &features, int num_nodes, int &num_features)
+void read_features_omp(const std::string &filename, std::vector<double> &features, int num_nodes, int &num_features)
 {
     std::ifstream file(filename);
     if (!file)
@@ -332,7 +331,7 @@ void read_features(const std::string &filename, std::vector<double> &features, i
     }
 }
 
-void read_labels(const std::string &filename, std::vector<int> &labels, int &num_classes)
+void read_labels_omp(const std::string &filename, std::vector<int> &labels, int &num_classes)
 {
     std::ifstream file(filename);
     if (!file)
@@ -387,23 +386,23 @@ void initialize_weights_cuda(std::vector<double*> &W_d, const std::vector<int> &
 }
 
 void GCN(){
-    int num_layers = gcn_ctx.layer_dims.size() - 1;
+    int num_layers = gcn_ctx_cuda.layer_dims.size() - 1;
     double alpha = 1.0;
     double beta = 0.0;
 
     for (int l = 0; l < num_layers; ++l) {
-        int in_dim = gcn_ctx.layer_dims[l];
-        int out_dim = gcn_ctx.layer_dims[l + 1];
+        int in_dim = gcn_ctx_cuda.layer_dims[l];
+        int out_dim = gcn_ctx_cuda.layer_dims[l + 1];
 
-        CHECK_CUSPARSE(cusparseSpMM(gcn_ctx.sp_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, gcn_ctx.A_descr, gcn_ctx.H_descr[l],&beta, gcn_ctx.Temp_descr[l], CUDA_R_64F,CUSPARSE_SPMM_ALG_DEFAULT, gcn_ctx.dBuffer));
+        CHECK_CUSPARSE(cusparseSpMM(gcn_ctx_cuda.sp_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, gcn_ctx_cuda.A_descr, gcn_ctx_cuda.H_descr[l],&beta, gcn_ctx_cuda.Temp_descr[l], CUDA_R_64F,CUSPARSE_SPMM_ALG_DEFAULT, gcn_ctx_cuda.dBuffer));
 
         
-        CHECK_CUBLAS(cublasDgemm(gcn_ctx.bl_handle, CUBLAS_OP_N, CUBLAS_OP_N,out_dim, gcn_ctx.num_nodes, in_dim,&alpha, gcn_ctx.W_d[l], out_dim, gcn_ctx.H_d[l], in_dim, &beta, gcn_ctx.Z_d[l], out_dim));
+        CHECK_CUBLAS(cublasDgemm(gcn_ctx_cuda.bl_handle, CUBLAS_OP_N, CUBLAS_OP_N,out_dim, gcn_ctx_cuda.num_nodes, in_dim,&alpha, gcn_ctx_cuda.W_d[l], out_dim, gcn_ctx_cuda.H_d[l], in_dim, &beta, gcn_ctx_cuda.Z_d[l], out_dim));
 
-        int size = gcn_ctx.num_nodes * out_dim;
+        int size = gcn_ctx_cuda.num_nodes * out_dim;
         int threadsPerBlock = 256;
         int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
-        relu_kernel<<<blocksPerGrid, threadsPerBlock>>>(gcn_ctx.H_d[l + 1], gcn_ctx.Z_d[l], size);
+        relu_kernel<<<blocksPerGrid, threadsPerBlock>>>(gcn_ctx_cuda.H_d[l + 1], gcn_ctx_cuda.Z_d[l], size);
         CHECK_CUDA(cudaGetLastError());
         // CHECK_CUDA(cudaDeviceSynchronize()); 
     }
@@ -411,50 +410,50 @@ void GCN(){
 
 
 void GCN_backprop(int epoch){
-     int L = gcn_ctx.layer_dims.size() - 1;
+     int L = gcn_ctx_cuda.layer_dims.size() - 1;
 
     std::vector<double*> dZ_d(L), dH_d(L);
     double alpha = 1.0;
     double beta = 0.0;
     for (int l = 0; l < L; ++l) {
-        CHECK_CUDA(cudaMalloc(&dZ_d[l], gcn_ctx.num_nodes * gcn_ctx.layer_dims[l + 1] * sizeof(double)));
+        CHECK_CUDA(cudaMalloc(&dZ_d[l], gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.layer_dims[l + 1] * sizeof(double)));
 
-        if(l > 0) CHECK_CUDA(cudaMalloc(&dH_d[l-1], gcn_ctx.num_nodes * gcn_ctx.layer_dims[l] * sizeof(double)));
+        if(l > 0) CHECK_CUDA(cudaMalloc(&dH_d[l-1], gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.layer_dims[l] * sizeof(double)));
     
 
     }
-    int out_dim = gcn_ctx.layer_dims.back();
-    int size = gcn_ctx.num_nodes * out_dim;
+    int out_dim = gcn_ctx_cuda.layer_dims.back();
+    int size = gcn_ctx_cuda.num_nodes * out_dim;
     int threadsPerBlock = 256;
     int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
-    softmax_cross_entropy_grad_kernel<<<blocksPerGrid, threadsPerBlock>>>(gcn_ctx.Z_d[L - 1], gcn_ctx.labels_d, dZ_d[L - 1], gcn_ctx.num_nodes, out_dim);
+    softmax_cross_entropy_grad_kernel<<<blocksPerGrid, threadsPerBlock>>>(gcn_ctx_cuda.Z_d[L - 1], gcn_ctx_cuda.labels_d, dZ_d[L - 1], gcn_ctx_cuda.num_nodes, out_dim);
     CHECK_CUDA(cudaGetLastError());
 
     for (int l = L - 1; l >= 0; --l) {
-        int in_dim = gcn_ctx.layer_dims[l];
-        int out_dim = gcn_ctx.layer_dims[l + 1];
+        int in_dim = gcn_ctx_cuda.layer_dims[l];
+        int out_dim = gcn_ctx_cuda.layer_dims[l + 1];
         double *dW_d;
         CHECK_CUDA(cudaMalloc(&dW_d, in_dim * out_dim * sizeof(double)));
 
        
-        CHECK_CUBLAS(cublasDgemm(gcn_ctx.bl_handle, CUBLAS_OP_N, CUBLAS_OP_T,out_dim, in_dim, gcn_ctx.num_nodes,&alpha, dZ_d[l], out_dim, gcn_ctx.H_d[l], in_dim,&beta, dW_d, out_dim));
+        CHECK_CUBLAS(cublasDgemm(gcn_ctx_cuda.bl_handle, CUBLAS_OP_N, CUBLAS_OP_T,out_dim, in_dim, gcn_ctx_cuda.num_nodes,&alpha, dZ_d[l], out_dim, gcn_ctx_cuda.H_d[l], in_dim,&beta, dW_d, out_dim));
 
         int w_size = in_dim * out_dim;
         int adam_blocks = (w_size + threadsPerBlock - 1) / threadsPerBlock;
         adam_kernel<<<adam_blocks, threadsPerBlock>>>(
-            gcn_ctx.W_d[l], dW_d, gcn_ctx.m_d[l], gcn_ctx.v_d[l], w_size, 0.9, 0.999, 1e-8, 0.001, epoch);
+            gcn_ctx_cuda.W_d[l], dW_d, gcn_ctx_cuda.m_d[l], gcn_ctx_cuda.v_d[l], w_size, 0.9, 0.999, 1e-8, 0.001, epoch);
         CHECK_CUDA(cudaGetLastError());
         // CHECK_CUDA(cudaDeviceSynchronize());
         CHECK_CUDA(cudaFree(dW_d)); 
 
         if (l > 0) {
 
-            CHECK_CUBLAS(cublasDgemm(gcn_ctx.bl_handle, CUBLAS_OP_T, CUBLAS_OP_N,in_dim, gcn_ctx.num_nodes, out_dim,&alpha, gcn_ctx.W_d[l], out_dim, dZ_d[l], out_dim,&beta, dH_d[l - 1], in_dim));
+            CHECK_CUBLAS(cublasDgemm(gcn_ctx_cuda.bl_handle, CUBLAS_OP_T, CUBLAS_OP_N,in_dim, gcn_ctx_cuda.num_nodes, out_dim,&alpha, gcn_ctx_cuda.W_d[l], out_dim, dZ_d[l], out_dim,&beta, dH_d[l - 1], in_dim));
 
-            int prev_size = gcn_ctx.num_nodes * in_dim;
+            int prev_size = gcn_ctx_cuda.num_nodes * in_dim;
             int relu_blocks = (prev_size + threadsPerBlock - 1) / threadsPerBlock;
             relu_derivative_kernel<<<relu_blocks, threadsPerBlock>>>(
-                gcn_ctx.Z_d[l - 1], dH_d[l - 1], dZ_d[l - 1], prev_size);
+                gcn_ctx_cuda.Z_d[l - 1], dH_d[l - 1], dZ_d[l - 1], prev_size);
             CHECK_CUDA(cudaGetLastError());
             // CHECK_CUDA(cudaDeviceSynchronize());
             CHECK_CUDA(cudaFree(dH_d[l-1])); // Free dH
@@ -552,89 +551,89 @@ void init_cuda(std::vector<int> neuronsPerLayer, std::string initWeights, std::s
 
      std::vector<int> A_row_ptr_h, A_col_idx_h;
     std::vector<double> A_edgeweights_h;
-    read_graph(folderpath + "_edgelist.txt", A_row_ptr_h, A_col_idx_h, A_edgeweights_h, gcn_ctx.num_nodes);
+    read_graph_omp(folderpath + "_edgelist.txt", A_row_ptr_h, A_col_idx_h, A_edgeweights_h, gcn_ctx_cuda.num_nodes);
 
 
     std::vector<double> features;
-    read_features(folderpath + "_features.txt", features, gcn_ctx.num_nodes, gcn_ctx.num_features);
+    read_features_omp(folderpath + "_features.txt", features, gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.num_features);
 
     std::vector<int> labels;
-    read_labels(folderpath + "_labels.txt", labels, gcn_ctx.num_classes);
+    read_labels_omp(folderpath + "_labels.txt", labels, gcn_ctx_cuda.num_classes);
 
 
-    gcn_ctx.layer_dims = neuronsPerLayer;
-    gcn_ctx.layer_dims[0] = gcn_ctx.num_features; // Input layer size
-    gcn_ctx.layer_dims[gcn_ctx.layer_dims.size() - 1] = gcn_ctx.num_classes; // Output layer size
+    gcn_ctx_cuda.layer_dims = neuronsPerLayer;
+    gcn_ctx_cuda.layer_dims[0] = gcn_ctx_cuda.num_features; // Input layer size
+    gcn_ctx_cuda.layer_dims[gcn_ctx_cuda.layer_dims.size() - 1] = gcn_ctx_cuda.num_classes; // Output layer size
 
 
 
-    CHECK_CUBLAS(cublasCreate(&gcn_ctx.bl_handle));
-    CHECK_CUSPARSE(cusparseCreate(&gcn_ctx.sp_handle));
-    CHECK_CUDA(cudaMalloc(&gcn_ctx.A_row_d, (gcn_ctx.num_nodes + 1) * sizeof(int)));
-    CHECK_CUDA(cudaMalloc(&gcn_ctx.A_col_d, gcn_ctx.num_edges * sizeof(int)));
-    CHECK_CUDA(cudaMalloc(&gcn_ctx.A_val_d, gcn_ctx.num_edges * sizeof(double)));
-    CHECK_CUDA(cudaMalloc(&gcn_ctx.labels_d, gcn_ctx.num_nodes * sizeof(int)));
-    CHECK_CUDA(cudaMalloc(&gcn_ctx.features_d, gcn_ctx.num_nodes * gcn_ctx.num_features * sizeof(double)));
+    CHECK_CUBLAS(cublasCreate(&gcn_ctx_cuda.bl_handle));
+    CHECK_CUSPARSE(cusparseCreate(&gcn_ctx_cuda.sp_handle));
+    CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.A_row_d, (gcn_ctx_cuda.num_nodes + 1) * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.A_col_d, gcn_ctx_cuda.num_edges * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.A_val_d, gcn_ctx_cuda.num_edges * sizeof(double)));
+    CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.labels_d, gcn_ctx_cuda.num_nodes * sizeof(int)));
+    CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.features_d, gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.num_features * sizeof(double)));
 
-    CHECK_CUDA(cudaMemcpy(gcn_ctx.A_row_d, A_row_ptr_h.data(), (gcn_ctx.num_nodes + 1) * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK_CUDA(cudaMemcpy(gcn_ctx.A_col_d, A_col_idx_h.data(), gcn_ctx.num_edges * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK_CUDA(cudaMemcpy(gcn_ctx.A_val_d, A_edgeweights_h.data(), gcn_ctx.num_edges * sizeof(double), cudaMemcpyHostToDevice));
-    CHECK_CUDA(cudaMemcpy(gcn_ctx.labels_d, labels.data(), gcn_ctx.num_nodes * sizeof(int), cudaMemcpyHostToDevice));
-    CHECK_CUDA(cudaMemcpy(gcn_ctx.features_d, features.data(), gcn_ctx.num_nodes * gcn_ctx.num_features * sizeof(double), cudaMemcpyHostToDevice));
-    initialize_weights_cuda(gcn_ctx.W_d, gcn_ctx.layer_dims);
+    CHECK_CUDA(cudaMemcpy(gcn_ctx_cuda.A_row_d, A_row_ptr_h.data(), (gcn_ctx_cuda.num_nodes + 1) * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(gcn_ctx_cuda.A_col_d, A_col_idx_h.data(), gcn_ctx_cuda.num_edges * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(gcn_ctx_cuda.A_val_d, A_edgeweights_h.data(), gcn_ctx_cuda.num_edges * sizeof(double), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(gcn_ctx_cuda.labels_d, labels.data(), gcn_ctx_cuda.num_nodes * sizeof(int), cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(gcn_ctx_cuda.features_d, features.data(), gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.num_features * sizeof(double), cudaMemcpyHostToDevice));
+    initialize_weights_cuda(gcn_ctx_cuda.W_d, gcn_ctx_cuda.layer_dims);
 
-    gcn_ctx.m_d.resize(gcn_ctx.W_d.size());
-    gcn_ctx.v_d.resize(gcn_ctx.W_d.size());
+    gcn_ctx_cuda.m_d.resize(gcn_ctx_cuda.W_d.size());
+    gcn_ctx_cuda.v_d.resize(gcn_ctx_cuda.W_d.size());
 
-    for (int i = 0; i < gcn_ctx.W_d.size(); ++i) {
-        int size = gcn_ctx.layer_dims[i] * gcn_ctx.layer_dims[i+1];
-        CHECK_CUDA(cudaMalloc(&gcn_ctx.m_d[i], size * sizeof(double)));
-        CHECK_CUDA(cudaMalloc(&gcn_ctx.v_d[i], size * sizeof(double)));
-        CHECK_CUDA(cudaMemset(gcn_ctx.m_d[i], 0, size * sizeof(double)));
-        CHECK_CUDA(cudaMemset(gcn_ctx.v_d[i], 0, size * sizeof(double)));
+    for (int i = 0; i < gcn_ctx_cuda.W_d.size(); ++i) {
+        int size = gcn_ctx_cuda.layer_dims[i] * gcn_ctx_cuda.layer_dims[i+1];
+        CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.m_d[i], size * sizeof(double)));
+        CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.v_d[i], size * sizeof(double)));
+        CHECK_CUDA(cudaMemset(gcn_ctx_cuda.m_d[i], 0, size * sizeof(double)));
+        CHECK_CUDA(cudaMemset(gcn_ctx_cuda.v_d[i], 0, size * sizeof(double)));
     }
-    int num_layers = gcn_ctx.layer_dims.size() - 1;
-    gcn_ctx.Z_d.resize(num_layers);
-    gcn_ctx.H_d.resize(num_layers + 1);
+    int num_layers = gcn_ctx_cuda.layer_dims.size() - 1;
+    gcn_ctx_cuda.Z_d.resize(num_layers);
+    gcn_ctx_cuda.H_d.resize(num_layers + 1);
     
-    gcn_ctx.H_descr.resize(num_layers + 1);
-    gcn_ctx.Z_descr.resize(num_layers);
-    gcn_ctx.Temp_descr.resize(num_layers);
+    gcn_ctx_cuda.H_descr.resize(num_layers + 1);
+    gcn_ctx_cuda.Z_descr.resize(num_layers);
+    gcn_ctx_cuda.Temp_descr.resize(num_layers);
 
-    gcn_ctx.H_d[0] = gcn_ctx.features_d;
+    gcn_ctx_cuda.H_d[0] = gcn_ctx_cuda.features_d;
 
-    CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx.H_descr[0], gcn_ctx.num_nodes, gcn_ctx.layer_dims[0], gcn_ctx.layer_dims[0], gcn_ctx.H_d[0], CUDA_R_64F, CUSPARSE_ORDER_ROW));
+    CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx_cuda.H_descr[0], gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.layer_dims[0], gcn_ctx_cuda.layer_dims[0], gcn_ctx_cuda.H_d[0], CUDA_R_64F, CUSPARSE_ORDER_ROW));
 
     
      for (int l = 0; l < num_layers; ++l) {
-        CHECK_CUDA(cudaMalloc(&gcn_ctx.Z_d[l], gcn_ctx.num_nodes * gcn_ctx.layer_dims[l + 1] * sizeof(double)));
-        CHECK_CUDA(cudaMalloc(&gcn_ctx.H_d[l+1], gcn_ctx.num_nodes * gcn_ctx.layer_dims[l + 1] * sizeof(double)));
-        CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx.Z_descr[l], gcn_ctx.num_nodes, gcn_ctx.layer_dims[l+1], gcn_ctx.layer_dims[l+1], gcn_ctx.Z_d[l], CUDA_R_64F, CUSPARSE_ORDER_ROW));
-        CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx.H_descr[l+1], gcn_ctx.num_nodes, gcn_ctx.layer_dims[l+1], gcn_ctx.layer_dims[l+1], gcn_ctx.H_d[l+1], CUDA_R_64F, CUSPARSE_ORDER_ROW));
+        CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.Z_d[l], gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.layer_dims[l + 1] * sizeof(double)));
+        CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.H_d[l+1], gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.layer_dims[l + 1] * sizeof(double)));
+        CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx_cuda.Z_descr[l], gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.layer_dims[l+1], gcn_ctx_cuda.layer_dims[l+1], gcn_ctx_cuda.Z_d[l], CUDA_R_64F, CUSPARSE_ORDER_ROW));
+        CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx_cuda.H_descr[l+1], gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.layer_dims[l+1], gcn_ctx_cuda.layer_dims[l+1], gcn_ctx_cuda.H_d[l+1], CUDA_R_64F, CUSPARSE_ORDER_ROW));
 
         double* temp_d;
-        CHECK_CUDA(cudaMalloc(&temp_d, gcn_ctx.num_nodes * gcn_ctx.layer_dims[l] * sizeof(double)));
-        CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx.Temp_descr[l], gcn_ctx.num_nodes, gcn_ctx.layer_dims[l], gcn_ctx.layer_dims[l], temp_d, CUDA_R_64F, CUSPARSE_ORDER_ROW));
+        CHECK_CUDA(cudaMalloc(&temp_d, gcn_ctx_cuda.num_nodes * gcn_ctx_cuda.layer_dims[l] * sizeof(double)));
+        CHECK_CUSPARSE(cusparseCreateDnMat(&gcn_ctx_cuda.Temp_descr[l], gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.layer_dims[l], gcn_ctx_cuda.layer_dims[l], temp_d, CUDA_R_64F, CUSPARSE_ORDER_ROW));
     }
 
-    CHECK_CUSPARSE(cusparseCreateCsr(&gcn_ctx.A_descr, gcn_ctx.num_nodes, gcn_ctx.num_nodes, gcn_ctx.num_edges, gcn_ctx.A_row_d, gcn_ctx.A_col_d, gcn_ctx.A_val_d, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_64F));
+    CHECK_CUSPARSE(cusparseCreateCsr(&gcn_ctx_cuda.A_descr, gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.num_edges, gcn_ctx_cuda.A_row_d, gcn_ctx_cuda.A_col_d, gcn_ctx_cuda.A_val_d, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_64F));
 
 
 
     size_t bufferSize = 0;
     double alpha = 1.0, beta = 0.0;
     int max_dim = 0;
-    max_dim = gcn_ctx.layer_dims[0] ;
-    double* temp_H_buffer; CHECK_CUDA(cudaMalloc(&temp_H_buffer, gcn_ctx.num_nodes * max_dim * sizeof(double)));
-    cusparseDnMatDescr_t temp_H_descr; CHECK_CUSPARSE(cusparseCreateDnMat(&temp_H_descr, gcn_ctx.num_nodes, max_dim, max_dim, temp_H_buffer, CUDA_R_64F, CUSPARSE_ORDER_ROW));
-    double* temp_T_buffer; CHECK_CUDA(cudaMalloc(&temp_T_buffer, gcn_ctx.num_nodes * max_dim * sizeof(double)));
-    cusparseDnMatDescr_t temp_T_descr; CHECK_CUSPARSE(cusparseCreateDnMat(&temp_T_descr, gcn_ctx.num_nodes, max_dim, max_dim, temp_T_buffer, CUDA_R_64F, CUSPARSE_ORDER_ROW));
+    max_dim = gcn_ctx_cuda.layer_dims[0] ;
+    double* temp_H_buffer; CHECK_CUDA(cudaMalloc(&temp_H_buffer, gcn_ctx_cuda.num_nodes * max_dim * sizeof(double)));
+    cusparseDnMatDescr_t temp_H_descr; CHECK_CUSPARSE(cusparseCreateDnMat(&temp_H_descr, gcn_ctx_cuda.num_nodes, max_dim, max_dim, temp_H_buffer, CUDA_R_64F, CUSPARSE_ORDER_ROW));
+    double* temp_T_buffer; CHECK_CUDA(cudaMalloc(&temp_T_buffer, gcn_ctx_cuda.num_nodes * max_dim * sizeof(double)));
+    cusparseDnMatDescr_t temp_T_descr; CHECK_CUSPARSE(cusparseCreateDnMat(&temp_T_descr, gcn_ctx_cuda.num_nodes, max_dim, max_dim, temp_T_buffer, CUDA_R_64F, CUSPARSE_ORDER_ROW));
 
-    CHECK_CUSPARSE(cusparseSpMM_bufferSize(gcn_ctx.sp_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                           CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, gcn_ctx.A_descr, temp_H_descr,
+    CHECK_CUSPARSE(cusparseSpMM_bufferSize(gcn_ctx_cuda.sp_handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                                           CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, gcn_ctx_cuda.A_descr, temp_H_descr,
                                            &beta, temp_T_descr, CUDA_R_64F,
                                            CUSPARSE_SPMM_ALG_DEFAULT, &bufferSize));
-    CHECK_CUDA(cudaMalloc(&gcn_ctx.dBuffer, bufferSize));
+    CHECK_CUDA(cudaMalloc(&gcn_ctx_cuda.dBuffer, bufferSize));
     CHECK_CUDA(cudaFree(temp_H_buffer)); CHECK_CUDA(cudaFree(temp_T_buffer));
     CHECK_CUSPARSE(cusparseDestroyDnMat(temp_H_descr)); CHECK_CUSPARSE(cusparseDestroyDnMat(temp_T_descr));
 }
@@ -643,48 +642,49 @@ void init_cuda(std::vector<int> neuronsPerLayer, std::string initWeights, std::s
 
 void cleanup_cuda()                             //This function cleans up the allocated memory and resources used and should be called at the end of the program.
 {
-    for (auto &ptr : gcn_ctx.W_d)
+    for (auto &ptr : gcn_ctx_cuda.W_d)
         cudaFree(ptr);
-    for (auto &ptr : gcn_ctx.H_d)
+    for (auto &ptr : gcn_ctx_cuda.H_d)
         cudaFree(ptr);
-    for (auto &ptr : gcn_ctx.Z_d)
+    for (auto &ptr : gcn_ctx_cuda.Z_d)
         cudaFree(ptr);
-    for (auto &ptr : gcn_ctx.Temp_d)
+    for (auto &ptr : gcn_ctx_cuda.Temp_d)
         cudaFree(ptr);
-    for (auto &ptr : gcn_ctx.m_d)
+    for (auto &ptr : gcn_ctx_cuda.m_d)
         cudaFree(ptr);
-    for (auto &ptr : gcn_ctx.v_d)
+    for (auto &ptr : gcn_ctx_cuda.v_d)
         cudaFree(ptr);
-    cudaFree(gcn_ctx.A_row_d);
-    cudaFree(gcn_ctx.A_col_d);
-    cudaFree(gcn_ctx.A_val_d);
-    cudaFree(gcn_ctx.labels_d);
-    cudaFree(gcn_ctx.features_d);
+    cudaFree(gcn_ctx_cuda.A_row_d);
+    cudaFree(gcn_ctx_cuda.A_col_d);
+    cudaFree(gcn_ctx_cuda.A_val_d);
+    cudaFree(gcn_ctx_cuda.labels_d);
+    cudaFree(gcn_ctx_cuda.features_d);
 
-    for (auto &desc : gcn_ctx.H_descr)
+    for (auto &desc : gcn_ctx_cuda.H_descr)
         cusparseDestroyDnMat(desc);
-    for (auto &desc : gcn_ctx.Z_descr)
+    for (auto &desc : gcn_ctx_cuda.Z_descr)
         cusparseDestroyDnMat(desc);
-    for (auto &desc : gcn_ctx.Temp_descr)
+    for (auto &desc : gcn_ctx_cuda.Temp_descr)
         cusparseDestroyDnMat(desc);
-    cusparseDestroySpMat(gcn_ctx.A_descr);
+    cusparseDestroySpMat(gcn_ctx_cuda.A_descr);
 
-    cublasDestroy(gcn_ctx.bl_handle);
-    cusparseDestroy(gcn_ctx.sp_handle);
+    cublasDestroy(gcn_ctx_cuda.bl_handle);
+    cusparseDestroy(gcn_ctx_cuda.sp_handle);
 }
 
 
 
 void compute_loss_cuda(){
-    gcn_ctx.loss = compute_loss_and_accuracy_cuda(gcn_ctx.Z_d[gcn_ctx.layer_dims.size() - 2],gcn_ctx.labels_d,gcn_ctx.num_nodes,gcn_ctx.layer_dims.back(),gcn_ctx.accuracy);
-    std::cout << "Loss: " << gcn_ctx.loss << std::endl;
+    gcn_ctx_cuda.loss = compute_loss_and_accuracy_cuda(gcn_ctx_cuda.Z_d[gcn_ctx_cuda.layer_dims.size() - 2],gcn_ctx_cuda.labels_d,gcn_ctx_cuda.num_nodes,gcn_ctx_cuda.layer_dims.back(),gcn_ctx_cuda.accuracy);
+    std::cout << "Loss: " << gcn_ctx_cuda.loss << std::endl;
 }
 
 void compute_accuracy_cuda(){
-    gcn_ctx.accuracy = 0.0;
-    compute_loss_and_accuracy_cuda(gcn_ctx.Z_d[gcn_ctx.layer_dims.size() - 2], gcn_ctx.labels_d, gcn_ctx.num_nodes, gcn_ctx.layer_dims.back(), gcn_ctx.accuracy);
-    std::cout << "Accuracy: " << gcn_ctx.accuracy * 100.0 << "%" << std::endl;
+    gcn_ctx_cuda.accuracy = 0.0;
+    compute_loss_and_accuracy_cuda(gcn_ctx_cuda.Z_d[gcn_ctx_cuda.layer_dims.size() - 2], gcn_ctx_cuda.labels_d, gcn_ctx_cuda.num_nodes, gcn_ctx_cuda.layer_dims.back(), gcn_ctx_cuda.accuracy);
+    std::cout << "Accuracy: " << gcn_ctx_cuda.accuracy * 100.0 << "%" << std::endl;
 }
+
 
 // void print_cuda_info()               //This function prints information about the CUDA devices may or may not be useful but very helpful if you are using large graphs. 
 // {
@@ -731,10 +731,10 @@ void compute_accuracy_cuda(){
 //     }
 //     double acc = 0.0;
 //     double loss = compute_loss_and_accuracy_cuda(
-//         gcn_ctx.Z_d[gcn_ctx.layer_dims.size() - 2],
-//         gcn_ctx.labels_d,
-//         gcn_ctx.num_nodes,
-//         gcn_ctx.layer_dims.back(),
+//         gcn_ctx_cuda.Z_d[gcn_ctx_cuda.layer_dims.size() - 2],
+//         gcn_ctx_cuda.labels_d,
+//         gcn_ctx_cuda.num_nodes,
+//         gcn_ctx_cuda.layer_dims.back(),
 //         acc);
 
 //     auto end = std::chrono::high_resolution_clock::now();
@@ -765,6 +765,6 @@ void compute_accuracy_cuda(){
 //     return 0;
 // }
 
-// nvcc -std=c++17 test_file.cu -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm  -O3
+// nvcc test.cu -lcublas -lcusparse -lcurand 
 
 //Run the above command to compile and run the code. Make sure you have the necessary libraries installed and linked properly.
