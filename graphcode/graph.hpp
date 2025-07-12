@@ -11,11 +11,13 @@
 #include <random>
 #include <unordered_set>
 #include "graph_ompv2.hpp"
-#include "OMP_GNN.hpp"
 
 #ifdef __CUDACC__
 #include "CUDA_GNN.cuh"
+#else
+#include "OMP_GNN.hpp"
 #endif
+
 
 
 class edge
@@ -1101,21 +1103,21 @@ class GNN
     // }
 
 
-    void compute_accuracy()
+    double compute_accuracy()
     {
       #ifdef __CUDACC__
-        compute_accuracy_cuda();
+         compute_accuracy_cuda();
       #else
-        compute_accuracy_omp();
+        return  compute_accuracy_omp();
       #endif
     }
 
-    void compute_loss()
+    double compute_loss()
     {
       #ifdef __CUDACC__
-        compute_loss_cuda();
+         compute_loss_cuda();
       #else
-        compute_loss_omp();
+        return compute_loss_omp();
       #endif
     }
 };

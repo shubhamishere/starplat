@@ -1815,6 +1815,12 @@ namespace spomp
         }
       }
     }
+    else if (type->isGNNType())
+    {
+       main.pushstr_space(convertToCppType(type));
+       main.pushString(declStmt->getdeclId()->getIdentifier());
+        main.pushstr_newL(";");
+    }
   }
 
   void dsl_cpp_generator::generate_exprLiteral(Expression *expr)
@@ -2793,13 +2799,13 @@ namespace spomp
       else
         return "int";
     }
-    else if (type->isGraphType())
-    {
-      return "graph&";
-    }
     else if (type->isGNNType())
     {
       return "GNN ";
+    }
+    else if (type->isGraphType())
+    {
+      return "graph&";
     }
     else if (type->isCollectionType())
     {
