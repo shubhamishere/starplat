@@ -23,38 +23,44 @@
 #include <vector>
 #include <algorithm>
 #include <omp.h>
+#include <mpi.h>
 
 
-
-struct GCNContext_OMP
+struct GCNContext_MPI
 {
-
     std::vector<double> A_val;
     std::vector<int> A_row;
     std::vector<int> A_col;
     std::vector<int> labels;
     sparse_matrix_t A;
-
     std::vector<double> features;
+
     std::vector<std::vector<double>> W; 
-    std::vector<std::vector<double>> Z; 
-    std::vector<std::vector<double>> H; 
     std::vector<int> layer_dims; 
+
     std::vector<std::vector<double>> m; 
     std::vector<std::vector<double>> v;
 
-
+    std::vector<std::vector<double>> Z; 
+    std::vector<std::vector<double>> H; 
 
     int num_nodes;
     int num_edges;
     int num_features;
     int num_classes;
     int num_layers;
-    
+
+    std::vector<std::vector<double>> agg_H;       
+    std::vector<std::vector<double>> dZ;          
+    std::vector<std::vector<double>> dH;          
+    std::vector<std::vector<double>> dW_global;   
+    std::vector<double> temp_grad_buffer;         
 };
 
-GCNContext_OMP gcn_ctx_omp;
-//Reading functions are defined herer
+
+GCNContext_MPI gcn_ctx_mpi;
+
+
 
 void read_graph(const std::string &filename, std::vector<int> &row_ptr, std::vector<int> &col_idx, std::vector<double> &weights, int &num_nodes)
 {
@@ -231,7 +237,7 @@ void read_graph(const std::string &filename, std::vector<int> &row_ptr, std::vec
         }
     }
 
-    gcn_ctx_omp.num_nodes = row_ptr.size() - 1; 
+    gcn_ctx_mpi.num_nodes = row_ptr.size() - 1; 
 }
 
 
@@ -384,296 +390,302 @@ void initialize_weights(std::vector<std::vector<double>> &W,
     }
 }
 
+
 void gcn_forward_omp()
 {
-
-    std::copy(gcn_ctx_omp.features.begin(), gcn_ctx_omp.features.end(), gcn_ctx_omp.H[0].begin());
-    int num_layers = gcn_ctx_omp.layer_dims.size() - 1;
-
-    if (gcn_ctx_omp.H.size() != num_layers + 1 || gcn_ctx_omp.Z.size() != num_layers)
-    {
-        std::cerr << "Error: Vectors H and Z not properly initialized" << std::endl;
-        return;
-    }
+    std::copy(gcn_ctx_mpi.features.begin(), gcn_ctx_mpi.features.end(), gcn_ctx_mpi.H[0].begin());
+    
     struct matrix_descr descr;
     descr.type = SPARSE_MATRIX_TYPE_GENERAL;
 
-    for (int l = 0; l < num_layers; ++l)
+    for (int l = 0; l < gcn_ctx_mpi.num_layers; ++l)
     {
-        int in_dim = gcn_ctx_omp.layer_dims[l];
-        int out_dim = gcn_ctx_omp.layer_dims[l + 1];
+        int in_dim = gcn_ctx_mpi.layer_dims[l];
+        int out_dim = gcn_ctx_mpi.layer_dims[l + 1];
 
-        // temp = A * H[l]
-        std::vector<double> temp(gcn_ctx_omp.num_nodes * in_dim, 0.0);
-        mkl_sparse_d_mm(SPARSE_OPERATION_NON_TRANSPOSE,
-                        1.0, gcn_ctx_omp.A, descr,
-                        SPARSE_LAYOUT_ROW_MAJOR,
-                        gcn_ctx_omp.H[l].data(), in_dim, in_dim,
-                        0.0, temp.data(), in_dim);
+        mkl_sparse_d_mm(SPARSE_OPERATION_NON_TRANSPOSE, 1.0, gcn_ctx_mpi.A, descr,
+                        SPARSE_LAYOUT_ROW_MAJOR, gcn_ctx_mpi.H[l].data(),
+                        in_dim, in_dim, 0.0, gcn_ctx_mpi.agg_H[l].data(), in_dim);
 
-        // Z[l] = temp * W[l]
         cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                    gcn_ctx_omp.num_nodes, out_dim, in_dim,
-                    1.0, temp.data(), in_dim, gcn_ctx_omp.W[l].data(), out_dim,
-                    0.0, gcn_ctx_omp.Z[l].data(), out_dim);
+                    gcn_ctx_mpi.num_nodes, out_dim, in_dim, 1.0,
+                    gcn_ctx_mpi.agg_H[l].data(), in_dim,
+                    gcn_ctx_mpi.W[l].data(), out_dim,
+                    0.0, gcn_ctx_mpi.Z[l].data(), out_dim);
 
-        // ReLU
-        for (int i = 0; i < gcn_ctx_omp.num_nodes * out_dim; ++i)
+        if (l < gcn_ctx_mpi.num_layers - 1)
         {
-            gcn_ctx_omp.H[l + 1][i] = std::max(0.0, gcn_ctx_omp.Z[l][i]);
+            #pragma omp parallel for schedule(static)
+            for (int i = 0; i < gcn_ctx_mpi.num_nodes * out_dim; ++i)
+                gcn_ctx_mpi.H[l + 1][i] = std::max(0.0, gcn_ctx_mpi.Z[l][i]);
+        }
+        else
+        {
+            std::copy(gcn_ctx_mpi.Z[l].begin(), gcn_ctx_mpi.Z[l].end(), gcn_ctx_mpi.H[l + 1].begin());
         }
     }
 }
 
-void gcn_backpropagation_omp(int epoch)
+
+
+void gcn_backpropagation_mpi(int epoch, int rank, int size)
 {
-    epoch = epoch + 1; // Adam optimizer requires t to start from 1
-    int L = gcn_ctx_omp.layer_dims.size() - 1;
-    std::vector<std::vector<double>> dZ(L), dH(L);
+    epoch = epoch + 1; // Adam optimizer t starts from 1
+    int L = gcn_ctx_mpi.num_layers;
+    
+    int out_dim = gcn_ctx_mpi.layer_dims.back();
+    std::vector<double>& dZ_last = gcn_ctx_mpi.dZ[L - 1];
 
-    // calculating the gradient of the loss fpr output layer
-    int out_dim = gcn_ctx_omp.layer_dims.back();
-    dZ[L - 1].resize(gcn_ctx_omp.num_nodes * out_dim);
-
-    // Softmax Cross-Entropy Loss Gradient
-    std::vector<double> probs = gcn_ctx_omp.Z[L - 1];
-
-    for (int i = 0; i < gcn_ctx_omp.num_nodes; i++)
+    #pragma omp parallel for
+    for (int i = 0; i < gcn_ctx_mpi.num_nodes; i++)
     {
         double max_val = -1e9;
-        for (int j = 0; j < out_dim; j++)
-            max_val = std::max(max_val, gcn_ctx_omp.Z[L - 1][i * out_dim + j]);
+        for (int j = 0; j < out_dim; j++) max_val = std::max(max_val, gcn_ctx_mpi.Z[L - 1][i * out_dim + j]);
 
         double sum_exp = 0.0;
+        std::vector<double> probs(out_dim);
         for (int j = 0; j < out_dim; j++)
         {
-            probs[i * out_dim + j] = std::exp(gcn_ctx_omp.Z[L - 1][i * out_dim + j] - max_val);
-            sum_exp += probs[i * out_dim + j];
+            probs[j] = std::exp(gcn_ctx_mpi.Z[L - 1][i * out_dim + j] - max_val);
+            sum_exp += probs[j];
         }
 
         for (int j = 0; j < out_dim; j++)
         {
-            probs[i * out_dim + j] /= sum_exp;
-            dZ[L - 1][i * out_dim + j] = probs[i * out_dim + j] - (j == gcn_ctx_omp.labels[i] ? 1.0 : 0.0);
+            dZ_last[i * out_dim + j] = (probs[j] / sum_exp) - (j == gcn_ctx_mpi.labels[i] ? 1.0 : 0.0);
         }
     }
 
-    // propagating error backward
+    struct matrix_descr descr;
+    descr.type = SPARSE_MATRIX_TYPE_GENERAL;
+
     for (int l = L - 1; l >= 0; --l)
     {
-        int in_dim = gcn_ctx_omp.layer_dims[l];
-        int out_dim = gcn_ctx_omp.layer_dims[l + 1];
+        int in_dim = gcn_ctx_mpi.layer_dims[l];
+        int out_dim = gcn_ctx_mpi.layer_dims[l + 1];
 
-        // Compute gradient of the loss w.r.t. the weights at this layer
-        std::vector<double> dW(in_dim * out_dim, 0.0);
+
+        std::vector<double> local_dW(in_dim * out_dim, 0.0); 
         cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans,
-                    in_dim, out_dim, gcn_ctx_omp.num_nodes,
-                    1.0, gcn_ctx_omp.H[l].data(), in_dim, dZ[l].data(), out_dim,
-                    0.0, dW.data(), out_dim);
+                    in_dim, out_dim, gcn_ctx_mpi.num_nodes,
+                    1.0, gcn_ctx_mpi.agg_H[l].data(), in_dim, gcn_ctx_mpi.dZ[l].data(), out_dim,
+                    0.0, local_dW.data(), out_dim);
 
-        // adam optimizer
-        adam(gcn_ctx_omp.W[l], dW, gcn_ctx_omp.m[l], gcn_ctx_omp.v[l], in_dim, out_dim, 0.9, 0.999, 1e-8, 0.001, epoch);
 
-        // Backpropagate the error to the previous layer
+        MPI_Allreduce(local_dW.data(), gcn_ctx_mpi.dW_global[l].data(), in_dim * out_dim, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+        adam(gcn_ctx_mpi.W[l], gcn_ctx_mpi.dW_global[l], gcn_ctx_mpi.m[l], gcn_ctx_mpi.v[l], in_dim, out_dim, 0.9, 0.999, 1e-8, 0.001, epoch);
+
         if (l > 0)
         {
-            dH[l - 1].resize(gcn_ctx_omp.num_nodes * in_dim);
             cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-                        gcn_ctx_omp.num_nodes, in_dim, out_dim,
-                        1.0, dZ[l].data(), out_dim, gcn_ctx_omp.W[l].data(), out_dim,
-                        0.0, dH[l - 1].data(), in_dim);
+                        gcn_ctx_mpi.num_nodes, in_dim, out_dim,
+                        1.0, gcn_ctx_mpi.dZ[l].data(), out_dim, gcn_ctx_mpi.W[l].data(), out_dim,
+                        0.0, gcn_ctx_mpi.dH[l - 1].data(), in_dim);
+            
 
-            dZ[l - 1].resize(gcn_ctx_omp.num_nodes * in_dim);
-            for (int i = 0; i < gcn_ctx_omp.num_nodes * in_dim; ++i)
-                dZ[l - 1][i] = gcn_ctx_omp.Z[l - 1][i] > 0 ? dH[l - 1][i] : 0.0; // activation derivative
+            mkl_sparse_d_mm(SPARSE_OPERATION_NON_TRANSPOSE, 1.0, gcn_ctx_mpi.A, descr,
+                            SPARSE_LAYOUT_ROW_MAJOR, gcn_ctx_mpi.dH[l-1].data(), in_dim, in_dim,
+                            0.0, gcn_ctx_mpi.temp_grad_buffer.data(), in_dim);
+
+            #pragma omp parallel for
+            for (int i = 0; i < gcn_ctx_mpi.num_nodes * in_dim; ++i) {
+                gcn_ctx_mpi.dZ[l - 1][i] = (gcn_ctx_mpi.Z[l - 1][i] > 0) ? gcn_ctx_mpi.temp_grad_buffer[i] : 0.0;
+            }
         }
     }
 }
 
 
+
+
+
+void init_mpi(std::vector<int> &neuronsPerLayer, std::string initWeights, std::string folderPath, int rank, int size)
+{
+    // Rank 0 reads all data from files
+    if (rank == 0) {
+        read_graph(folderPath + "_edgelist.txt", gcn_ctx_mpi.A_row, gcn_ctx_mpi.A_col, gcn_ctx_mpi.A_val, gcn_ctx_mpi.num_nodes);
+        read_features(folderPath + "_features.txt", gcn_ctx_mpi.features, gcn_ctx_mpi.num_nodes, gcn_ctx_mpi.num_features);
+        read_labels(folderPath + "_labels.txt", gcn_ctx_mpi.labels, gcn_ctx_mpi.num_classes);
+        gcn_ctx_mpi.num_edges = gcn_ctx_mpi.A_val.size();
+    }
+
+    // Broadcast metadata
+    MPI_Bcast(&gcn_ctx_mpi.num_nodes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&gcn_ctx_mpi.num_features, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&gcn_ctx_mpi.num_classes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&gcn_ctx_mpi.num_edges, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Resize vectors on non-zero ranks
+    if (rank != 0) {
+        gcn_ctx_mpi.features.resize(gcn_ctx_mpi.num_nodes * gcn_ctx_mpi.num_features);
+        gcn_ctx_mpi.labels.resize(gcn_ctx_mpi.num_nodes);
+        gcn_ctx_mpi.A_row.resize(gcn_ctx_mpi.num_nodes + 1);
+        gcn_ctx_mpi.A_col.resize(gcn_ctx_mpi.num_edges);
+        gcn_ctx_mpi.A_val.resize(gcn_ctx_mpi.num_edges);
+    }
+
+    // Broadcast data
+    MPI_Bcast(gcn_ctx_mpi.features.data(), gcn_ctx_mpi.features.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(gcn_ctx_mpi.labels.data(), gcn_ctx_mpi.labels.size(), MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(gcn_ctx_mpi.A_row.data(), gcn_ctx_mpi.A_row.size(), MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(gcn_ctx_mpi.A_col.data(), gcn_ctx_mpi.A_col.size(), MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(gcn_ctx_mpi.A_val.data(), gcn_ctx_mpi.A_val.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // All processes create their local copy of the sparse matrix
+    mkl_sparse_d_create_csr(&gcn_ctx_mpi.A, SPARSE_INDEX_BASE_ZERO, gcn_ctx_mpi.num_nodes, gcn_ctx_mpi.num_nodes,
+                            gcn_ctx_mpi.A_row.data(), gcn_ctx_mpi.A_row.data() + 1, gcn_ctx_mpi.A_col.data(), gcn_ctx_mpi.A_val.data());
+
+    // Set layer dimensions
+    gcn_ctx_mpi.layer_dims = neuronsPerLayer;
+    gcn_ctx_mpi.layer_dims[0] = gcn_ctx_mpi.num_features;
+    gcn_ctx_mpi.layer_dims.back() = gcn_ctx_mpi.num_classes;
+    gcn_ctx_mpi.num_layers = gcn_ctx_mpi.layer_dims.size() - 1;
+
+    // Initialize weights on rank 0 and broadcast to all
+    gcn_ctx_mpi.W.resize(gcn_ctx_mpi.num_layers);
+    if (rank == 0) {
+        initialize_weights(gcn_ctx_mpi.W, gcn_ctx_mpi.layer_dims);
+    }
+    for (int l = 0; l < gcn_ctx_mpi.num_layers; ++l) {
+        int in_dim = gcn_ctx_mpi.layer_dims[l];
+        int out_dim = gcn_ctx_mpi.layer_dims[l + 1];
+        if (rank != 0) gcn_ctx_mpi.W[l].resize(in_dim * out_dim);
+        MPI_Bcast(gcn_ctx_mpi.W[l].data(), in_dim * out_dim, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
+
+    // OPTIMIZATION: Pre-allocate all buffers
+    gcn_ctx_mpi.Z.resize(gcn_ctx_mpi.num_layers);
+    gcn_ctx_mpi.H.resize(gcn_ctx_mpi.num_layers + 1);
+    gcn_ctx_mpi.agg_H.resize(gcn_ctx_mpi.num_layers);
+    gcn_ctx_mpi.dZ.resize(gcn_ctx_mpi.num_layers);
+    gcn_ctx_mpi.dH.resize(gcn_ctx_mpi.num_layers);
+    gcn_ctx_mpi.dW_global.resize(gcn_ctx_mpi.num_layers);
+    
+    int max_layer_size = 0;
+    for (int l = 0; l < gcn_ctx_mpi.num_layers; ++l) {
+        int in_dim = gcn_ctx_mpi.layer_dims[l];
+        int out_dim = gcn_ctx_mpi.layer_dims[l + 1];
+        
+        gcn_ctx_mpi.H[l].resize(gcn_ctx_mpi.num_nodes * in_dim);
+        gcn_ctx_mpi.Z[l].resize(gcn_ctx_mpi.num_nodes * out_dim);
+        gcn_ctx_mpi.agg_H[l].resize(gcn_ctx_mpi.num_nodes * in_dim);
+        gcn_ctx_mpi.dZ[l].resize(gcn_ctx_mpi.num_nodes * out_dim);
+        if (l > 0) gcn_ctx_mpi.dH[l-1].resize(gcn_ctx_mpi.num_nodes * in_dim);
+        gcn_ctx_mpi.dW_global[l].resize(in_dim * out_dim);
+        max_layer_size = std::max({max_layer_size, (int)gcn_ctx_mpi.H[l].size(), (int)gcn_ctx_mpi.Z[l].size()});
+    }
+    gcn_ctx_mpi.H.back().resize(gcn_ctx_mpi.num_nodes * gcn_ctx_mpi.layer_dims.back());
+    gcn_ctx_mpi.temp_grad_buffer.resize(max_layer_size);
+
+
+    // Initialize Adam optimizer state vectors
+    gcn_ctx_mpi.m.resize(gcn_ctx_mpi.W.size());
+    gcn_ctx_mpi.v.resize(gcn_ctx_mpi.W.size());
+    for (size_t i = 0; i < gcn_ctx_mpi.W.size(); ++i) {
+        gcn_ctx_mpi.m[i].resize(gcn_ctx_mpi.W[i].size(), 0.0);
+        gcn_ctx_mpi.v[i].resize(gcn_ctx_mpi.W[i].size(), 0.0);
+    }
+}
+
+
+
+// Fix 3: Add proper MPI wrapper function
+void backprop_mpi(std::string modelType, std::string aggregationType, int epoch, int rank, int size)
+{
+    if(modelType == "GCN") {
+        gcn_backpropagation_mpi(epoch, rank, size);
+    }
+    // else if(modelType=="GAT")                //To be implemented
+    // {
+    //     GAT_backpropagation_mpi(epoch, rank, size);
+    // }
+    else
+    {
+        std::cerr << "Unknown model type: " << modelType << std::endl;
+        exit(1);
+    }
+}
 
 double compute_loss()
 {
     double loss = 0.0;
-    for (int i = 0; i < gcn_ctx_omp.num_nodes; i++)
+    for (int i = 0; i < gcn_ctx_mpi.num_nodes; i++)
     {
         double max_val = -1e9;
-        for (int j = 0; j < gcn_ctx_omp.layer_dims.back(); j++)
+        for (int j = 0; j < gcn_ctx_mpi.layer_dims.back(); j++)
         {
-            max_val = std::max(max_val, gcn_ctx_omp.Z.back()[i * gcn_ctx_omp.layer_dims.back() + j]);
+            max_val = std::max(max_val, gcn_ctx_mpi.Z.back()[i * gcn_ctx_mpi.layer_dims.back() + j]);
         }
 
         double sum_exp = 0.0;
-        for (int j = 0; j < gcn_ctx_omp.layer_dims.back(); j++)
+        for (int j = 0; j < gcn_ctx_mpi.layer_dims.back(); j++)
         {
-            sum_exp += std::exp(gcn_ctx_omp.Z.back()[i * gcn_ctx_omp.layer_dims.back() + j] - max_val);
+            sum_exp += std::exp(gcn_ctx_mpi.Z.back()[i * gcn_ctx_mpi.layer_dims.back() + j] - max_val);
         }
 
-        double prob = std::exp(gcn_ctx_omp.Z.back()[i * gcn_ctx_omp.layer_dims.back() + gcn_ctx_omp.labels[i]] - max_val) / sum_exp;
+        double prob = std::exp(gcn_ctx_mpi.Z.back()[i * gcn_ctx_mpi.layer_dims.back() + gcn_ctx_mpi.labels[i]] - max_val) / sum_exp;
         loss += -std::log(std::max(prob, 1e-10)); // to avoid log 0
     }
 
-    return loss / gcn_ctx_omp.num_nodes;
+    return loss / gcn_ctx_mpi.num_nodes;
 }
 
 double compute_accuracy()
 {
     int correct = 0;
-    for (int i = 0; i < gcn_ctx_omp.num_nodes; i++)
+    for (int i = 0; i < gcn_ctx_mpi.num_nodes; i++)
     {
         int pred = -1;
         double max_val = -1e9;
-        for (int j = 0; j < gcn_ctx_omp.layer_dims.back(); j++)
+        for (int j = 0; j < gcn_ctx_mpi.layer_dims.back(); j++)
         {
-            double val = gcn_ctx_omp.Z.back()[i * gcn_ctx_omp.layer_dims.back() + j];
+            double val = gcn_ctx_mpi.Z.back()[i * gcn_ctx_mpi.layer_dims.back() + j];
             if (val > max_val)
             {
                 max_val = val;
                 pred = j;
             }
         }
-        if (pred == gcn_ctx_omp.labels[i])
+        if (pred == gcn_ctx_mpi.labels[i])
             correct++;
     }
-    return static_cast<double>(correct) / gcn_ctx_omp.num_nodes;
+    return static_cast<double>(correct) / gcn_ctx_mpi.num_nodes;
 }
 
 
 
 
 
-
-
-
-void init_omp(std::vector<int> &neuronsPerLayer, std::string initWeights , std::string folderPath)
+double compute_loss_mpi(int rank, int size)
 {
-    
-    read_graph(folderPath + "_edgelist.txt",    gcn_ctx_omp.A_row , gcn_ctx_omp.A_col, gcn_ctx_omp.A_val, gcn_ctx_omp.num_nodes);
-
-    read_features(folderPath + "_features.txt", gcn_ctx_omp.features, gcn_ctx_omp.num_nodes, gcn_ctx_omp.num_features);
-
-    read_labels(folderPath + "_labels.txt", gcn_ctx_omp.labels, gcn_ctx_omp.num_classes);
-
-    mkl_sparse_d_create_csr(&gcn_ctx_omp.A, SPARSE_INDEX_BASE_ZERO, gcn_ctx_omp.num_nodes-1, gcn_ctx_omp.num_nodes-1,
-                            gcn_ctx_omp.A_row.data(), gcn_ctx_omp.A_row.data() + 1, gcn_ctx_omp.A_col.data(), gcn_ctx_omp.A_val.data());
-
-    gcn_ctx_omp.layer_dims = neuronsPerLayer;
-    gcn_ctx_omp.layer_dims[0] = gcn_ctx_omp.num_features;
-    gcn_ctx_omp.layer_dims[gcn_ctx_omp.layer_dims.size() - 1] = gcn_ctx_omp.num_classes;  
-
-    
-    
-    initialize_weights(gcn_ctx_omp.W, gcn_ctx_omp.layer_dims);
-
-    int num_layers = gcn_ctx_omp.layer_dims.size() - 1;
-    gcn_ctx_omp.Z.resize(num_layers);
-    gcn_ctx_omp.H.resize(num_layers + 1);
-
-    for (int l = 0; l < num_layers; ++l)
-    {
-        gcn_ctx_omp.Z[l].resize(gcn_ctx_omp.num_nodes * gcn_ctx_omp.layer_dims[l + 1], 0.0);
-        gcn_ctx_omp.H[l].resize(gcn_ctx_omp.num_nodes * gcn_ctx_omp.layer_dims[l], 0.0);
+    double global_loss = 0.0;
+    if (rank == 0) {
+        global_loss = compute_loss();
+        std::cout << "Loss: " << global_loss << std::endl;
     }
-    gcn_ctx_omp.H[num_layers].resize(gcn_ctx_omp.num_nodes * gcn_ctx_omp.layer_dims[num_layers], 0.0);
-
-    gcn_ctx_omp.m.resize(gcn_ctx_omp.W.size(), {});
-    gcn_ctx_omp.v.resize(gcn_ctx_omp.W.size(), {});
-    for (int i = 0; i < gcn_ctx_omp.W.size(); ++i)
-    {
-        gcn_ctx_omp.m[i].resize(gcn_ctx_omp.W[i].size(), 0.0);
-        gcn_ctx_omp.v[i].resize(gcn_ctx_omp.W[i].size(), 0.0);
-    }
+    return global_loss;
 }
 
-
-void forward_omp(std::string modelType, std::string aggregationType)
+// OPTIMIZATION: Removed redundant Allreduce and calculations. Only rank 0 computes/prints.
+double compute_accuracy_mpi(int rank, int size)
 {
-    if(modelType=="GCN")
-    {
-        gcn_forward_omp();
+    double global_accuracy = 0.0;
+    if (rank == 0) {
+        global_accuracy = compute_accuracy();
+        std::cout << "Accuracy: " << global_accuracy << std::endl;
     }
-    // else if(modelType=="GAT")            //To be implemented by Saurabh
-    // {
-    //     GAT();
-    // }
-    else
-    {
-        std::cerr << "Unknown model type: " << modelType << std::endl;
-        exit(1);
-    }
+    return global_accuracy;
 }
 
 
-void backprop_omp(std::string modelType, std::string aggregationType,int epoch)
-{
-   if(modelType=="GCN"){
-    gcn_backpropagation_omp(epoch);
-   }
-    // else if(modelType=="GAT")                //To be implemented by Saurabh
-    // {
-    //     GAT();
-    // }
-    else
-    {
-        std::cerr << "Unknown model type: " << modelType << std::endl;
-        exit(1);
-    }
-}
 
-
-double compute_loss_omp()
-{
-    double loss = compute_loss();
-    std::cout << "Loss: " << loss << std::endl;
-    return loss;
-}
-
-double compute_accuracy_omp()
-{
-    double accuracy = compute_accuracy();
-    std::cout << "Accuracy: " << accuracy << std::endl;
-    return accuracy;
-}
 
 
 #endif 
 
-// void test(graph& g , std::vector<int> neuronsPerLayer , int totalEpochs)
-// {
-//   GNN gnn;
-//   gnn.init(neuronsPerLayer, "Xaviers", "");
+//mpicxx -o gcn_mpi MPI_test.cpp -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lpthread -lm -ldl -O3 && mpirun -np 4 ./gcn_mpi 
 
-//   for (int epochs = 0;
-//     epochs < totalEpochs; epochs++) {
-
-//     {
-//       gnn.forward("GCN", "SUM");
-
-//       gnn.backward("GCN", "SUM", epochs);
-
-//     }
-
-//   }
-
-
-// }    // The test function is the reference on how the generated code would look like. The optimized is getting called from inside the gnn.backward function.
-
-
-
-
-// int main(){              //This is how the main function would look like
-//     std::vector<int> neuronsPerLayer = {16, 32, 64};
-//     int totalEpochs = 100;
-//     graph g("flickr/flickr_edgelist.txt");
-//     g.parseGraph();
-//
-//     test(g, neuronsPerLayer, totalEpochs);
-//     return 0;
-// }
-
-
-//g++ test_file.cc -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm  -O3  
-
-// And to run on cluster use: "icc" instead of "g++" e.g. icc test_file.cc -O3
+// and to run on cluster use: "mpiicpc" instead of "mpicxx" e.g. mpiicpc -o gcn_mpi MPI_test.cpp && mpirun -np 4 ./gcn_mpi
 
 //Run the above command to compile and run the code. Make sure you have the necessary libraries installed and linked properly.
