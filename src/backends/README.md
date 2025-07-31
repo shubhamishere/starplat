@@ -339,4 +339,4 @@ This example shows:
 
 ## Conclusion
 
-This document should serve as a comprehensive reference for understanding and extending the StarPlat compiler. For backend-specific details, refer to the backend’s generator source files for each backend. WebGPU backend has it's implementation document in ```starplat/src/backends/backend_webgpu/README.md```
+This document should serve as a go-to reference for understanding and extending the StarPlat compiler. For backend-specific details, refer to the backend’s generator source files for each backend. WebGPU backend has it's implementation document in ```starplat/src/backends/backend_webgpu/README.md```
