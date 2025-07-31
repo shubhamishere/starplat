@@ -176,7 +176,7 @@ After semantic analysis, the backend is selected based on the user’s command-l
     3. Output: `graphcode/generated_multigpu/`
 
 ### WebGPU Backend
-- **Target**: Any machine with WebGPU support (JavaScript + WGSL)
+- **Target**: Any machine, any OS, any GPU with WebGPU support (JavaScript + WGSL)
 - **Static Generator**: `spwebgpu::dsl_webgpu_generator`
 - **Dynamic Support**: NO (Static graphs only)
 - **Flow**:
