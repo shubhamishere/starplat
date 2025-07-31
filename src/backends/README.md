@@ -246,25 +246,47 @@ Not all backends support dynamic graphs. Currently supported:
 3. **Memory Management**: Handle dynamic memory allocation and deallocation
 4. **Synchronization**: Additional synchronization for concurrent updates
 
-**Example Dynamic Graph DSL:**
+**Example Dynamic Graph DSL (from `dynamicBatchSSSP`):**
 ```
-procedure DynamicSSSP(G: dynamic_graph, source: node) {
-    var distances: node_prop<int>;
-    // Graph can be modified during execution
-    forall u in G.nodes {
-        distances[u] = INFINITY;
-    }
-    distances[source] = 0;
+Dynamic DynSSSP(Graph g, propNode<int> dist, propNode<int> parent, propEdge<int> weight, updates<g> updateBatch, int batchSize, int src) {
+  staticSSSP(g, dist, parent, weight, src);
+  Batch(updateBatch:batchSize) {
+    propNode<bool> modified;
+    propNode<bool> modified_add;
+    g.attachNodeProperty(modified = false, modified_add = false);
     
-    // Dynamic updates can occur here
-    G.addEdge(newNode, existingNode);
-    
-    // Continue with algorithm
-    forall u in G.nodes {
-        // Process nodes
+    OnDelete(u in updateBatch.currentBatch()): { 
+      int src = u.source;
+      int dest = u.destination;
+      if(dest.parent == src) {
+        dest.dist = INT_MAX/2;
+        dest.modified = True;
+        dest.parent = -1;
+      }
     }
+    g.updateCSRDel(updateBatch); 
+    Decremental(g, dist, parent, weight, modified);   
+    
+    OnAdd(u in updateBatch.currentBatch()):{
+      int src = u.source;
+      int dest = u.destination;
+      if(dest.dist > src.dist + 1) {
+        dest.modified_add = True;
+        src.modified_add = True;
+      }
+    }          
+    g.updateCSRAdd(updateBatch);      
+    Incremental(g, dist, parent, weight, modified_add);
+  }
 }
 ```
+
+This example shows:
+- **Dynamic keyword**: Indicates this is a dynamic graph algorithm
+- **Batch processing**: `Batch(updateBatch:batchSize)` for processing graph updates in batches
+- **Update handlers**: `OnDelete()` and `OnAdd()` for edge deletions/additions
+- **Graph modifications**: `g.updateCSRDel()` and `g.updateCSRAdd()` for graph structure changes
+- **Incremental/Decremental algorithms**: Separate handling for additions vs deletions
 
 ## Build & Run Instructions
 
