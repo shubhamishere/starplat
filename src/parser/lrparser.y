@@ -665,7 +665,7 @@ int main(int argc,char **argv)
    else
     {
 
-		if(!((strcmp(backendTarget,"hip")==0)||(strcmp(backendTarget,"omp")==0)|| (strcmp(backendTarget,"amd")==0) || (strcmp(backendTarget,"mpi")==0)||(strcmp(backendTarget,"cuda")==0) || (strcmp(backendTarget,"acc")==0) || (strcmp(backendTarget,"sycl")==0)|| (strcmp(backendTarget,"multigpu")==0)))
+		if(!((strcmp(backendTarget,"hip")==0)||(strcmp(backendTarget,"omp")==0)|| (strcmp(backendTarget,"amd")==0) || (strcmp(backendTarget,"mpi")==0)||(strcmp(backendTarget,"cuda")==0) || (strcmp(backendTarget,"acc")==0) || (strcmp(backendTarget,"sycl")==0)|| (strcmp(backendTarget,"multigpu")==0) || (strcmp(backendTarget,"webgpu")==0)))
 
 		   {
 			  fprintf(stderr, "Specified backend target is not implemented in the current version!\n");
@@ -801,6 +801,16 @@ int main(int argc,char **argv)
         cpp_backend.setFileName(fileName);
         cpp_backend.generate();
 	  }
+      else if (strcmp(backendTarget, "webgpu") == 0) {
+        const auto& funcList = frontEndContext.getFuncList();
+        if (funcList.empty()) {
+            std::cerr << "[WebGPU] Error: Function list is empty!" << std::endl;
+        } else {
+            spwebgpu::dsl_webgpu_generator webgpu_backend;
+            std::string outFile = "../graphcode/generated_webgpu/output.js";
+            webgpu_backend.generate(funcList.front(), outFile);
+        }
+      }
       else
 	    std::cout<< "invalid backend" << '\n';
 	  }
