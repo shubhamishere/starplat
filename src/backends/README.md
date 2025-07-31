@@ -22,7 +22,7 @@ This document provides a comprehensive overview of the StarPlat compiler, detail
     - [OpenACC Backend](#openacc-backend)
     - [MultiGPU Backend](#multigpu-backend)
     - [WebGPU Backend](#webgpu-backend)
-6. [Adding a New Backend](#adding-a-new-backend)
+6. [Adding a New Backend](#key-points-for-adding-a-new-backend-support-to-starplat)
 7. [Key Files and Directories](#key-files-and-directories)
 8. [Build & Run Instructions](#build--run-instructions)
 9. [Troubleshooting & Debugging](#troubleshooting--debugging)
