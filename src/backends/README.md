@@ -186,7 +186,7 @@ After semantic analysis, the backend is selected based on the user’s command-l
 
 ---
 
-## Adding a New Backend
+## Key Points for adding a New Backend support to StarPlat
 
 1. **Create Backend Directory**: `src/backends/backend_<name>/`
 2. **Implement Generator Class**: Follow the pattern of existing backends.
