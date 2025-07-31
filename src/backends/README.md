@@ -43,18 +43,18 @@ StarPlat is a domain-specific compiler for graph analytics. It takes a custom DS
 ## Compilation Flow
 
 ```mermaid
-graph TD;
-    A[DSL Input File] --> B[Lexer/Parser (Flex/Bison)]
+graph TD
+    A[DSL Input File] --> B[Lexer/Parser Flex/Bison]
     B --> C[AST Construction]
     C --> D[Symbol Table & Semantic Analysis]
-    D --> E[Graph Type Check (-s/-d)]
+    D --> E[Graph Type Check -s/-d]
     E --> F[Backend Selection]
     F --> G{Static or Dynamic?}
     G -->|Static| H[Static Generator]
     G -->|Dynamic| I[Dynamic Generator]
-    H --> J[Code Generation (Static)]
-    I --> K[Code Generation (Dynamic)]
-    J --> L[Generated Code (C++, CUDA, JS, WGSL, etc.)]
+    H --> J[Code Generation Static]
+    I --> K[Code Generation Dynamic]
+    J --> L[Generated Code C++, CUDA, JS, WGSL, etc.]
     K --> L
 ```
 
