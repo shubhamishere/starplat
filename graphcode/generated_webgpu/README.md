@@ -16,7 +16,9 @@ deno run --allow-read --unstable-webgpu driver_triangle_count.js <path/to/graph.
 - Host generation
   - Exports `Compute_*`; loads WGSL via `fetch('kernel_*.wgsl')`
   - Buffers: `adj_data`, `adj_offsets`, `result` (atomic<u32>), `properties` (array<atomic<u32>>)
-  - Writes node count to `properties[0]`; kernels read via `atomicLoad`
+  - Node count written once to `properties[0]` by host; kernels read via `atomicLoad`
+  - Shared `resultBuffer` and `propertyBuffer` are allocated once in `Compute_*` and passed to every `launchkernel_i(...)` (host orchestration update)
+  - Queue completion awaited before readback: `await device.queue.onSubmittedWorkDone()`
   - Safe dispatch (>= 1 workgroup)
 - Kernel generation
   - One kernel per `forall` (outer parallelism); nested control supported in WGSL
@@ -31,6 +33,12 @@ deno run --allow-read --unstable-webgpu driver_triangle_count.js <path/to/graph.
 
 ### Verified
 - Triangle counting works end-to-end (smoke graph validated via driver)
+
+### Recent changes (host orchestration)
+- Single allocation of `resultBuffer` and `propertyBuffer` in `Compute_*`
+- One-time write of nodeCount into `properties[0]`
+- All kernels now launched via `launchkernel_i(device, adj_data, adj_offsets, resultBuffer, propertyBuffer, nodeCount)`
+- Wait for GPU queue completion before mapping readback buffer
 
 ### Housekeeping (tests cleaned)
 - Removed temporary test files:

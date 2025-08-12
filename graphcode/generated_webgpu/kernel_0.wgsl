@@ -56,5 +56,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     return;
   }
 
-  atomicAddF32(&result, f32(1));
+  for (var edge = adj_offsets[v]; edge < adj_offsets[v + 1]; edge++) {
+    let u = adj_data[edge];
+    if ((u < v)) {
+      for (var edge = adj_offsets[v]; edge < adj_offsets[v + 1]; edge++) {
+        let w = adj_data[edge];
+        if ((w > v)) {
+          if (findEdge(u, w)) {
+            atomicAdd(&result, u32(1));
+          }
+        }
+      }
+    }
+  }
 }

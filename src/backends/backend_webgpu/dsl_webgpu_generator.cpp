@@ -84,6 +84,11 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   
   out << "export async function " << funcName << "(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount) {\n";
   out << "  let " << resultVar << " = 0;\n";
+  // Allocate shared result and properties buffers once
+  out << "  const resultBuffer = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });\n";
+  out << "  const propertyBuffer = device.createBuffer({ size: Math.max(1, nodeCount) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });\n";
+  out << "  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
+  out << "  device.queue.writeBuffer(propertyBuffer, 0, new Uint32Array([nodeCount]));\n";
   int launchIndex = 0;
   // Generate host-side sequencing for the function body
   generateHostBody(func->getBlockStatement(), out, launchIndex);
@@ -92,32 +97,16 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
 
   // Generate the kernel launch functions  
   for (int i = 0; i < kernelCounter; ++i) {
-    out << "async function launchkernel_" << i << "(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount) {\n";
+    out << "async function launchkernel_" << i << "(device, adj_dataBuffer, adj_offsetsBuffer, resultBuffer, propertyBuffer, nodeCount) {\n";
     out << "  const shaderCode = await (await fetch('kernel_" << i << ".wgsl')).text();\n";
     out << "  const shaderModule = device.createShaderModule({ code: shaderCode });\n";
     out << "  const pipeline = device.createComputePipeline({ layout: 'auto', compute: { module: shaderModule, entryPoint: 'main' } });\n";
     out << "  \n";
-    out << "  // Create result buffer for algorithm output\n";
-    out << "  const resultBuffer = device.createBuffer({ \n";
-    out << "    size: 4, \n";
-    out << "    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST \n";
-    out << "  });\n";
-    out << "  \n";
-    out << "  // Create property buffer for node properties\n";
-    out << "  const propertyBuffer = device.createBuffer({\n";
-    out << "    size: Math.max(1, nodeCount) * 4,\n";
-    out << "    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST\n";
-    out << "  });\n";
-    out << "  // Write nodeCount to properties[0] for the kernel to read\n";
-    out << "  device.queue.writeBuffer(propertyBuffer, 0, new Uint32Array([nodeCount]));\n";
-    out << "  \n";
+    out << "  // Using shared result/property buffers provided by caller\n";
     out << "  const readBuffer = device.createBuffer({ \n";
     out << "    size: 4, \n";
     out << "    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ \n";
     out << "  });\n";
-    out << "  \n";
-    out << "  // Initialize result buffer to 0\n";
-    out << "  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
     out << "  \n";
     out << "  const bindGroup = device.createBindGroup({ \n";
     out << "    layout: pipeline.getBindGroupLayout(0), \n";
@@ -173,7 +162,7 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
   }
 
   if (node->getTypeofNode() == NODE_FORALLSTMT) {
-    out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount);\n";
+    out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, resultBuffer, propertyBuffer, nodeCount);\n";
     // Assign to generic result for now
     out << "  result = kernel_res_" << launchIndex << ";\n";
     launchIndex++;
