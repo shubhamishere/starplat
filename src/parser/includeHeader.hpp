@@ -1,52 +1,27 @@
-#ifndef INCLUDEHEADER_H
-#define INCLUDEHEADER_H
+#ifndef INCLUDE_HEADER_HPP
+#define INCLUDE_HEADER_HPP
 
-/*
-* This file likely just adds the headers to the .h
-*/
-
-// #include "../maincontext/MainContext.hpp"
-#include "../maincontext/enum_def.hpp"
-// #include "../symbolutil/SymbolTable.hpp"
-/*#include "../ast/ASTNodeTypes.hpp"
 #include "../ast/ASTNode.hpp"
-#include "../ast/ASTHelper.cpp"*/
-
-/* UNCOMMENT IT TO GENERATE FOR OPENMP BACKEND */
-#include "../backends/backend_omp/dsl_cpp_generator.h"
-#include "../backends/backend_omp/dsl_dyn_cpp_generator.hpp"
-
-/* UNCOMMENT IT TO GENERATE FOR MPI BACKEND */
-#include "../backends/backend_mpi/dsl_cpp_generator.h"
-#include "../backends/backend_mpi/dsl_dyn_cpp_generator.h"
-
-/* UNCOMMENT IT TO GENERATE FOR CUDA BACKEND */
-#include "../backends/backend_cuda/dsl_cpp_generator.h"
-
-/* UNCOMMENT IT TO GENERATE FOR  OPENACC BACKEND */
-#include "../backends/backend_openACC/dsl_cpp_generator.h"
-
-/* UNCOMMENT IT TO GENERATE FOR  multigpu BACKEND */
-#include "../backends/backend_multigpu/dsl_cpp_generator.h"
-
+#include "../ast/ASTNodeTypes.hpp"
+#include "../maincontext/MainContext.hpp"
 #include "../symbolutil/SymbolTableBuilder.h"
 
-/* UNCOMMENT IT TO GENERATE FOR SYCL BACKEND */
-#include "../backends/backend_sycl/dsl_cpp_generator.h"
-
-/* UNCOMMENT IT TO GENERATE FOR AMD BACKEND */
-#include "../backends/backend_amd/dsl_cpp_generator.h"
-
+#include "../backends/backend_cuda/dsl_cpp_generator.h"
+#include "../backends/backend_omp/dsl_cpp_generator.h"
+#include "../backends/backend_mpi/dsl_cpp_generator.h"
+#include "../backends/backend_openACC/dsl_cpp_generator.h"
 #include "../backends/backend_hip/dsl_cpp_generator.h"
-
-/* UNCOMMENT IT TO GENERATE FOR WEBGPU BACKEND */
+#include "../backends/backend_sycl/dsl_cpp_generator.h"
+#include "../backends/backend_amd/dsl_cpp_generator.h"
+#include "../backends/backend_multigpu/dsl_cpp_generator.h"
 #include "../backends/backend_webgpu/dsl_webgpu_generator.h"
 
+// These utility functions are declared in parser's other translation units
+void addFuncToList(ASTNode* func);
+void setCurrentFuncType(int t);
+void resetTemp(std::vector<Identifier*>& ids);
 
-extern "C" int yyparse(void);
-// what would this do ?? 
-// Why call yyparse and pass void into it ?
-// Why return int.
-// What does "C" mean ?
+// Forward declarations for parser
 
-#endif
+#endif // INCLUDE_HEADER_HPP
+

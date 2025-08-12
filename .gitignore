@@ -34,3 +34,10 @@ graphcode/generated_omp/*h
 *.o
 **/.DS_Store
 graphcode/sample_graphs/*.DS_Store
+# macOS
+.DS_Store
+
+# dSYM bundles (debug symbols)
+*.dSYM/
+
+starplat/src/test_webgpu.dSYM/

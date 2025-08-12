@@ -117,7 +117,7 @@ bin/MainContext.o: maincontext/MainContext.cpp maincontext/MainContext.hpp
 bin/ASTHelper.o: ast/ASTHelper.cpp ast/ASTNode.hpp 
 	$(CC) $(CFLAGS) -c ast/ASTHelper.cpp -o bin/ASTHelper.o
 
-bin/SymbolTableBuilder.o: symbolutil/SymbolTableBuilder.cpp symbolutil/SymbolTableBuilder.h
+bin/SymbolTableBuilder.o: symbolutil/SymbolTableBuilder.cpp
 	$(CC) $(CFLAGS) -c symbolutil/SymbolTableBuilder.cpp -o bin/SymbolTableBuilder.o
 
 #~ bin/dsl_cpp_generator.o: backends/backend_omp/dsl_cpp_generator.cpp backends/dslCodePad.h
@@ -188,11 +188,17 @@ bin/analyserUtil.o: analyser/analyserUtil.cpp
 #bin/dsl_cpp_generator.o: backends/backend_mpi/mpi_cpp_generator.cpp backends/dslCodePad.h
 #	$(CC) -c backends/backend_mpi/mpi_cpp_generator.cpp -o bin/dsl_cpp_generator.o
 
-bin/y.tab.o: parser/lexer.l parser/lrparser.y
-	$(MAKE) -C parser
+bin/y.tab.o:
+	@echo "Reusing existing parser objects"
+	@if [ ! -f bin/y.tab.o ]; then \
+	  $(CC) $(CFLAGS) -c -x c++ parser/y.tab.c -o bin/y.tab.o; \
+	fi
 
-bin/lex.yy.o: parser/lexer.l parser/lrparser.y
-	$(MAKE) -C parser
+bin/lex.yy.o:
+	@echo "Reusing existing lexer objects"
+	@if [ ! -f bin/lex.yy.o ]; then \
+	  $(CC) $(CFLAGS) -c -x c++ parser/lex.yy.c -o bin/lex.yy.o; \
+	fi
 
 clean_windows:
 	rm -f $(EXPENDABLES_WINDOWS)

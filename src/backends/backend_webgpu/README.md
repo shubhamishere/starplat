@@ -1,3 +1,90 @@
+## StarPlat WebGPU backend – current status (brief)
+
+### Overview
+This backend generates JavaScript (host) and WGSL (compute shaders) for static graph algorithms. The host code is emitted as ES modules and runs on Deno (WebGPU). A generic driver is provided for end‑to‑end validation.
+
+### Implemented
+- Codegen structure
+  - Host: exports `Compute_*` functions; uses `fetch('kernel_*.wgsl')` to load shaders; creates/binds buffers `adj_data`, `adj_offsets`, `result`, `properties`.
+  - Kernels: one `kernel_i.wgsl` per `forall` (outer parallelism). Helper `findEdge(u,w)` for edge existence.
+  - Node count is passed via `properties[0]` and read in WGSL.
+
+- Statements / control (JS + WGSL)
+  - Declarations, assignments, unary (++/--), if/else
+  - while, do‑while, simple for; break/continue; return
+  - forall → WGSL kernel(s); nested constructs inside kernel supported
+  - fixedPoint (host): iterative loop skeleton with per‑iteration kernel launches (early version)
+
+- Expressions / built‑ins
+  - Constants (int/long/float/double/bool/string), arithmetic/relational/logical/unary
+  - Identifiers and property access
+  - Built‑ins: `g.is_an_edge(u,w)` → `findEdge`, `g.count_outNbrs(v)` → `adj_offsets[v+1]-adj_offsets[v]`
+  - `Min/Max/Sum` mapped in JS and WGSL (integer paths)
+
+- Reductions
+  - Scalar and property: `+=` (sum/count) via `atomicAdd(u32)`
+  - `Min/Max` for integers via `atomicMin/atomicMax`
+  - Float reductions (experimental): CAS helpers emitted in WGSL
+    - `atomicAddF32`, `atomicMinF32`, `atomicMaxF32` over `atomic<u32>`
+    - Result/property buffers casted appropriately (`u32(...)`/`f32(...)`)
+
+- Buffers and types
+  - `result`: `atomic<u32>` (scalar algorithm result)
+  - `properties`: `array<atomic<u32>>` (algorithm‑agnostic store; index 0 used for node count)
+  - Host writes node count into `properties[0]`; kernels read via `atomicLoad`.
+  - Dispatch safety: at least one workgroup, even for small graphs.
+
+- Drivers and usage
+  - Triangle counting driver: `graphcode/generated_webgpu/driver_triangle_count.js`
+  - Float sum smoke driver: `graphcode/generated_webgpu/driver_float_sum.js`
+  - Run (from `graphcode/generated_webgpu`):
+    - `deno run --allow-read --unstable-webgpu driver_triangle_count.js <graph.txt>`
+    - `deno run --allow-read --unstable-webgpu driver_float_sum.js <graph.txt>`
+
+### Verified so far
+- Triangle Counting (static) end‑to‑end via Deno driver (correct on smoke test).
+- PageRank codegen exercises sequencing/do‑while; a dedicated driver is pending.
+
+### Known gaps / next steps
+1) Host‑side sequencing and fixedPoint
+   - Generalize multi‑forall sequencing across entire function body
+   - Finalize fixedPoint loop with proper convergence reduction and buffer ping‑pong
+
+2) Float reductions
+   - Debug CAS path end‑to‑end (currently returning 0 in smoke test)
+   - Decide on storage scheme for float properties/results (separate float buffer vs bitcast in shared buffer)
+
+3) Tuple/multiple assignment and Min/Max updates
+   - Support constructs like `<nbr.dist, nbr.modified> = <Min(...), True>`
+
+4) Property layout
+   - Define stable per‑property offsets/strides in `properties`; persist across kernels
+   - Implement `attachNodeProperty` initialization on host
+
+5) Additional graph constructs
+   - `nodesTo/nodesFrom` (transpose CSR); `propEdge` and edge weights (`getEdge`, `e.weight`)
+   - BFS constructs: `iterateInBFS` / `iterateInReverse` (frontier management)
+
+6) Reductions
+   - Any/All (`||=`/`&&=`) via atomic bit operations
+   - Product reduction strategy (log‑space or integer CAS mul)
+
+7) Types and safety
+   - Broaden WGSL type inference/annotations; explicit casts for atomic args
+   - Parameterize dispatch policy (by nodes vs edges), workgroup size
+
+### Build and generate
+```sh
+cd starplat/src
+make -j8 | cat
+./StarPlat -s -f ../graphcode/staticDSLCodes/triangle_counting_dsl -b webgpu | cat
+# outputs to graphcode/generated_webgpu/{output.js,kernel_0.wgsl}
+```
+
+### Notes
+- Host uses `fetch('kernel_*.wgsl')`; drivers polyfill fetch to read local files.
+- Deno 2 requires granular flags; use `--unstable-webgpu`.
+
 # WebGPU Backend Implementation Documentation
 
 ## Overview

@@ -1,0 +1,20 @@
+function MinMaxSmoke(Graph g) {
+  int globalMin = 2147483647;
+  int globalMax = 0;
+  propNode<int> deg;
+  g.attachNodeProperty(deg = 0);
+
+  forall(v in g.nodes()) {
+    int d = g.count_outNbrs(v);
+    deg[v] = d;
+  }
+
+  // Global Min/Max using reductionCall production
+  forall(v in g.nodes()) {
+    globalMin = Min(globalMin, deg[v]);
+    globalMax = Max(globalMax, deg[v]);
+  }
+
+  return globalMin;
+}
+

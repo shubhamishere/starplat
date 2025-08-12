@@ -366,7 +366,7 @@ property : T_NP '<' primitive '>' { $$=Util::createPropertyTypeNode(TYPE_PROPNOD
 			  | T_NP '<' T_EDGE '>' {ASTNode* type = Util::createNodeEdgeTypeNode(TYPE_EDGE);
 			                         $$=Util::createPropertyTypeNode(TYPE_PROPNODE, type); }	
 
-assignment :  leftSide '=' rhs  { printf("testassign\n");$$=Util::createAssignmentNode($1,$3);};
+assignment :  leftSide '=' rhs  { printf("testassign\n");$$=Util::createAssignmentNode($1,$3);} ;
               | indexExpr '=' rhs {printf ("called assign for count\n") ; $$=Util::createAssignmentNode($1 , $3);};    
 			  | id '=' expression  { $$ = Util::createAssignmentNode($1, $3); };    
 
@@ -814,21 +814,7 @@ int main(int argc,char **argv)
       else
 	    std::cout<< "invalid backend" << '\n';
 	  }
-	else 
-	 {
-		if(strcmp(backendTarget, "omp") == 0) {
-		   spdynomp::dsl_dyn_cpp_generator cpp_dyn_gen;
-		   cpp_dyn_gen.setFileName(fileName);
-	       cpp_dyn_gen.generate();
-		}
-		if(strcmp(backendTarget, "mpi") == 0){
-		   spdynmpi::dsl_dyn_cpp_generator cpp_dyn_gen;
-		   std::cout<<"created dyn mpi"<<std::endl;
-		   cpp_dyn_gen.setFileName(fileName);
-		   std::cout<<"file name set"<<std::endl;
-	       cpp_dyn_gen.generate();	
-		}
-	 }
+	// Dynamic graph backends removed - focusing on static graphs only
 	
    }
 
