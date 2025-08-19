@@ -26,6 +26,8 @@ To begin, you first need to write the DSL code. Keep the following points in min
 - Store static graph codes in the [static graph directory](https://github.com/ashwinktpu/StarPlat/tree/WorkingBranch/graphcode/staticDSLCodes) and dynamic graph codes in the [dynamic graph directory](https://github.com/ashwinktpu/StarPlat/tree/WorkingBranch/graphcode/dynamicDSLCodes) for better organization.
 - `Aqua` is recommended to run StarPlat. This documentation will follow the `Aqua` workflow.
 
+Note: "Aqua" refers to IIT Madras' Aqua Cluster (High Performance Computing Environment). For more information, see [HPCE Guidelines](https://cc.iitm.ac.in/hpce/hpceguidelines.html), [Aqua Cluster](https://hpce.iitm.ac.in/content.php?navigate=aquacluster), and [Aqua Cluster | P.G. Senapathy Centre for Computing Resources](https://cc.iitm.ac.in/hpce/aqua.html).
+
 *Note: you can find [DSL code walkthrough (by Nibedita) here](https://drive.google.com/file/d/16RR6COlILdd2UxSjo_aUbHtjnvCGsqaw/view).*
 
 ## Code Generation
@@ -360,3 +362,19 @@ then just go the the directory of `bsh.txt` , and run `. bsh.txt`
 
 1. To know the available module in `Aqua` we can use the following command,
 `module avail` . Then `module load $pkg_name` ,if we want to remove a module we can use `module unload $pkg_name` .
+
+## Publication
+
+[StarPlat: A versatile DSL for graph analytics](https://www.sciencedirect.com/science/article/pii/S074373152400131X); Nibedita Behera, Ashwina Kumar, Ebenezer Rajadurai T, Sai Nitish, Rajesh Pandian M, Rupesh Nasre; IJPP 2024
+
+## Acknowledgments
+
+```
+This project is funded by India's National Supercomputing Mission, whose timely funding and regular reviews are greatly appreciated.
+Part of the work is supported by Qualcomm Innovation Fellowship 2023. 
+```
+
+## Licensing
+
+The StarPlat codebase is made available for academic and non-commercial use.
+StarPlat is patented. Commercial use of the code needs licensing. The interested may contact rupesh@cse.iitm.ac.in.
