@@ -1,8 +1,11 @@
 # StarPlat Documentation
-
+List of all README.md files:
+1. StarPlat main: [`starplat/readme.md`](https://github.com/gajendra-iitm/starplat/blob/main/readme.md)
+2. Documentation on code generation flow of various backends supported by StarPlat: [`starplat/src/backends/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/README.md)
+3. Documentation on implementation of WebGPU Backend: [`starplat/src/backends/backend_webgpu/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/backend_webgpu/README.md)
 # What is StarPlat?
 
-StarPlat is designed to make parallel computing easier for users. It reduces the need for complex parallelization instructions while still delivering performance close to hand-optimized code. When choosing between simplicity and performance, StarPlat prioritizes simplicity because it is mainly for domain experts.
+StarPlat is designed to make parallel computing easier for users in Graph algorithms domain. It reduces the need for complex parallelization instructions while still delivering performance close to hand-optimized code. When choosing between simplicity and performance, StarPlat prioritizes simplicity because it is mainly for domain experts.
 
 StarPlat provides key features and data types for static graph algorithms, including Graph, Node, Edge, and PropNode (for node properties). Users write in a procedural style and suggest parallelization opportunities using constructs like `forall`. The compiler then decides how to apply parallel execution, including nested `forall` loops. Many graph algorithms involve repeated execution until they reach a stopping condition, which StarPlat manages with the `fixedPoint`construct.
 
