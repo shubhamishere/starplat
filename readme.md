@@ -28,7 +28,7 @@ To begin, you first need to write the DSL code. Keep the following points in min
 
 Note: "Aqua" refers to IIT Madras' Aqua Cluster (High Performance Computing Environment). For more information, see [HPCE Guidelines](https://cc.iitm.ac.in/hpce/hpceguidelines.html), [Aqua Cluster](https://hpce.iitm.ac.in/content.php?navigate=aquacluster), and [Aqua Cluster | P.G. Senapathy Centre for Computing Resources](https://cc.iitm.ac.in/hpce/aqua.html).
 
-*Note: you can find [DSL code walkthrough (by Nibedita) here](https://drive.google.com/file/d/16RR6COlILdd2UxSjo_aUbHtjnvCGsqaw/view).*
+*Note: you can find [DSL code walkthrough (by Nibedita) here](https://drive.google.com/file/d/16RR6COlILdd2UxSjo_aUbHtjnvCGsqaw/view). Google sign-in is required to play the video* 
 
 ## Code Generation
 Note: For details about StarPlat's code generation backends (code generation flow, prerequisites, and usage notes), see [`starplat/src/backends/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/README.md).
