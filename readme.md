@@ -33,7 +33,7 @@ Note: "Aqua" refers to IIT Madras' Aqua Cluster (High Performance Computing Envi
 ## Code Generation
 Note: For details about StarPlat's code generation backends (code generation flow, prerequisites, and usage notes), see [`starplat/src/backends/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/README.md).
 
-Now the DSL code is ready to us. So to Compile we have to go [**StarPlat/src](https://github.com/ashwinktpu/StarPlat/tree/WorkingBranch/src).**
+Now the DSL code is ready to use. So to Compile we have to go [**StarPlat/src](https://github.com/ashwinktpu/StarPlat/tree/WorkingBranch/src).**
 
 And Inside this directory you have to run the following commands,
 
