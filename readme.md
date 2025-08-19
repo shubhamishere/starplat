@@ -31,6 +31,7 @@ Note: "Aqua" refers to IIT Madras' Aqua Cluster (High Performance Computing Envi
 *Note: you can find [DSL code walkthrough (by Nibedita) here](https://drive.google.com/file/d/16RR6COlILdd2UxSjo_aUbHtjnvCGsqaw/view).*
 
 ## Code Generation
+Note: For details about StarPlat's code generation backends (code generation flow, prerequisites, and usage notes), see [`starplat/src/backends/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/README.md).
 
 Now the DSL code is ready to us. So to Compile we have to go [**StarPlat/src](https://github.com/ashwinktpu/StarPlat/tree/WorkingBranch/src).**
 
@@ -49,7 +50,6 @@ Now, to generate code to a desired backend you have run the following command in
 ./StarPlat [-s|-d] -f <dsl.sp(DSL code file path)> -b [cuda|omp|mpi|acc|sycl]
 ```
 
-For details about StarPlat's code generation backends (code generation flow, prerequisites, and usage notes), see [`starplat/src/backends/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/README.md).
 
 Say we want to generate static code of triangle count for OpenMP backend. So we have to write,
 
