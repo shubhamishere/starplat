@@ -1,8 +1,14 @@
 # StarPlat Documentation
 List of all README.md files:
 1. StarPlat main: [`starplat/readme.md`](https://github.com/gajendra-iitm/starplat/blob/main/readme.md)
+
+DELETE before pr: [`starplat/readme.md`](https://github.com/shubhamishere/starplat/blob/main/readme.md)
 2. Documentation on code generation flow of various backends supported by StarPlat: [`starplat/src/backends/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/README.md)
+
+DELETE before pr: [`starplat/src/backends/README.md`](https://github.com/shubhamishere/starplat/blob/main/src/backends/README.md)
 3. Documentation on implementation of WebGPU Backend: [`starplat/src/backends/backend_webgpu/README.md`](https://github.com/gajendra-iitm/starplat/blob/main/src/backends/backend_webgpu/README.md)
+
+DELETE before pr: [`starplat/src/backends/backend_webgpu/README.md`](https://github.com/shubhamishere/starplat/blob/main/src/backends/backend_webgpu/README.md)
 # What is StarPlat?
 
 StarPlat is designed to make parallel computing easier for users in Graph algorithms domain. It reduces the need for complex parallelization instructions while still delivering performance close to hand-optimized code. When choosing between simplicity and performance, StarPlat prioritizes simplicity because it is mainly for domain experts.
