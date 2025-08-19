@@ -26,6 +26,9 @@ async function main() {
   }
 
   const { adj_offsets, adj_data, nodeCountForAllocation } = await processGraph(filePath);
+  console.log('[Driver] nodeCountForAllocation', nodeCountForAllocation);
+  console.log('[Driver] adj_offsets[0..min(10,n)]', Array.from(adj_offsets.slice(0, Math.min(11, adj_offsets.length))));
+  console.log('[Driver] adj_data[0..min(30,E)]', Array.from(adj_data.slice(0, Math.min(30, adj_data.length))));
 
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error("No WebGPU adapter found");

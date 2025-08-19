@@ -6,6 +6,7 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <map>
 
 namespace spwebgpu {
 
@@ -37,6 +38,19 @@ private:
   void generateReductionStmt(reductionCallStmt* stmt, std::ofstream& out);
 
   static std::string getOpString(int opType);
+  
+  // Phase 0: property registry and type mapping
+  struct PropInfo {
+    std::string name;
+    std::string wgslType; // "u32" | "i32" | "f32"
+    int bindingIndex;      // starts at 4
+    bool isReadWrite;      // default true
+  };
+
+  std::vector<PropInfo> propInfos;
+  void buildPropertyRegistry(Function* func);
+  std::string mapTypeToWGSL(Type* type);
+  bool isNumericIntegerType(Type* type);
 };
 
 } // namespace spwebgpu
