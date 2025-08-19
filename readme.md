@@ -49,6 +49,8 @@ Now, to generate code to a desired backend you have run the following command in
 ./StarPlat [-s|-d] -f <dsl.sp(DSL code file path)> -b [cuda|omp|mpi|acc|sycl]
 ```
 
+For details about StarPlat's code generation backends (code generation flow, prerequisites, and usage notes), see `src/backends/README.md`.
+
 Say we want to generate static code of triangle count for OpenMP backend. So we have to write,
 
 ```visual-basic
