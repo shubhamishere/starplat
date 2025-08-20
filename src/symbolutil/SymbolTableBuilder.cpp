@@ -1007,6 +1007,28 @@ void SymbolTableBuilder::checkForExpressions(Expression *expr)
         currentFunc->setIsMetaUsed();
       }
     }
+    if (s.compare(countInNbrCall) == 0)
+    {
+      ASTNode* parentNode = parallelConstruct[0];
+      if (parentNode->getTypeofNode() == NODE_FORALLSTMT)
+      {
+        forallStmt *parentForAll = (forallStmt *)parallelConstruct[0];
+        parentForAll->setIsRevMetaUsed();
+        currentFunc->setIsRevMetaUsed();
+      }else if(parentNode->getTypeofNode() == NODE_LOOPSTMT){
+        loopStmt *parentForAll = (loopStmt *)parallelConstruct[0];
+        parentForAll->setIsRevMetaUsed();
+        currentFunc->setIsRevMetaUsed();
+      }
+    }
+    if (s.compare(numNodesCall) == 0)
+    {
+      // num_nodes() doesn't require any special metadata
+    }
+    if (s.compare(numEdgesCall) == 0)
+    {
+      // num_edges() doesn't require any special metadata
+    }
     if(s.compare(getMSTCall) == 0){
           currentFunc->setIsWeightUsed();
           currentFunc->setIsMSTUsed();

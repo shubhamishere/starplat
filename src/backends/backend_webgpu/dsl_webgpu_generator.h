@@ -43,8 +43,9 @@ private:
   struct PropInfo {
     std::string name;
     std::string wgslType; // "u32" | "i32" | "f32"
-    int bindingIndex;      // starts at 4
+    int bindingIndex;      // starts at 6 (after reverse CSR buffers)
     bool isReadWrite;      // default true
+    bool isEdgeProperty;   // true for edge properties, false for node properties
   };
 
   std::vector<PropInfo> propInfos;

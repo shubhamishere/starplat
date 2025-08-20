@@ -41,3 +41,6 @@ graphcode/sample_graphs/*.DS_Store
 *.dSYM/
 
 starplat/src/test_webgpu.dSYM/
+
+# Ignore staticDSLCodes directory
+graphcode/staticDSLCodes/

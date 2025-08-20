@@ -118,7 +118,7 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   // Use a single generic result variable for all algorithms
   std::string resultVar = "result";
   
-  out << "export async function " << funcName << "(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount, props = {}) {\n";
+  out << "export async function " << funcName << "(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount, props = {}, rev_adj_dataBuffer = null, rev_adj_offsetsBuffer = null) {\n";
   out << "  console.log('[WebGPU] Compute start: " << funcName << " with nodeCount=', nodeCount);\n";
   out << "  let " << resultVar << " = 0;\n";
   // Allocate shared result and properties buffers once
@@ -161,7 +161,7 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
 
   // Generate the kernel launch functions  
   for (int i = 0; i < kernelCounter; ++i) {
-    out << "async function launchkernel_" << i << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount) {\n";
+    out << "async function launchkernel_" << i << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount, rev_adj_dataBuffer = null, rev_adj_offsetsBuffer = null) {\n";
     out << "  console.log('[WebGPU] launchkernel_" << i << ": begin');\n";
     out << "  const shaderCode = await (await fetch('kernel_" << i << ".wgsl')).text();\n";
     out << "  console.log('[WebGPU] launchkernel_" << i << ": WGSL fetched, size', shaderCode.length);\n";
@@ -197,10 +197,17 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
     out << "  const entries = [\n";
     out << "      { binding: 0, resource: { buffer: adj_offsetsBuffer } },\n";
     out << "      { binding: 1, resource: { buffer: adj_dataBuffer } },\n";
-    out << "      { binding: 2, resource: { buffer: paramsBuffer } },\n";
-    out << "      { binding: 3, resource: { buffer: resultBuffer } }\n";
+    out << "      { binding: 4, resource: { buffer: paramsBuffer } },\n";
+    out << "      { binding: 5, resource: { buffer: resultBuffer } }\n";
     out << "  ];\n";
-    if (!propInfos.empty()) { out << "  entries.push(...propEntries);\n"; } else { out << "  entries.push({ binding: 4, resource: { buffer: propertyBuffer } });\n"; }
+    out << "  // Add reverse CSR buffers if provided\n";
+    out << "  if (rev_adj_offsetsBuffer) {\n";
+    out << "    entries.push({ binding: 2, resource: { buffer: rev_adj_offsetsBuffer } });\n";
+    out << "  }\n";
+    out << "  if (rev_adj_dataBuffer) {\n";
+    out << "    entries.push({ binding: 3, resource: { buffer: rev_adj_dataBuffer } });\n";
+    out << "  }\n";
+    if (!propInfos.empty()) { out << "  entries.push(...propEntries);\n"; } else { out << "  entries.push({ binding: 6, resource: { buffer: propertyBuffer } });\n"; }
     out << "  const bindGroup = device.createBindGroup({ layout: bindGroupLayout, entries });\n";
     out << "  console.log('[WebGPU] launchkernel_" << i << ": bindGroup created');\n";
     out << "  \n";
@@ -254,7 +261,7 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
   if (node->getTypeofNode() == NODE_FORALLSTMT) {
     out << "  // Reset result before dispatch\n";
     out << "  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
-    out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount);\n";
+    out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount, rev_adj_dataBuffer, rev_adj_offsetsBuffer);\n";
     // Assign to generic result for now
     out << "  result = kernel_res_" << launchIndex << ";\n";
     // If there is a scalar reduction target like 'triangle_count', keep it in sync
@@ -543,6 +550,9 @@ void dsl_webgpu_generator::generateExpr(ASTNode* node, std::ofstream& out) {
             } else if (methodName == "count_outNbrs") {
               // Count of out neighbors is not computed on host; placeholder 0
               out << "0";
+            } else if (methodName == "count_inNbrs") {
+              // Count of in neighbors is not computed on host; placeholder 0
+              out << "0";
             } else if (methodName == "num_nodes") {
               out << "nodeCount";
             } else if (methodName == "Min") {
@@ -630,6 +640,8 @@ void dsl_webgpu_generator::generateExpr(ASTNode* node, std::ofstream& out) {
           out << "true"; // placeholder on host
         } else if (methodName == "count_outNbrs") {
           out << "0"; // placeholder on host
+        } else if (methodName == "count_inNbrs") {
+          out << "0"; // placeholder on host
         } else {
           out << "0";
         }
@@ -649,12 +661,16 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
   
   // --- Storage Buffers ---
   wgslOut << "// Graph algorithm compute shader\n";
-  // Match manual driver convention: binding 0 = adj_offsets, binding 1 = adj_data
+  // Forward CSR (required)
   wgslOut << "@group(0) @binding(0) var<storage, read> adj_offsets: array<u32>;\n";
   wgslOut << "@group(0) @binding(1) var<storage, read> adj_data: array<u32>;\n";
+  // Reverse CSR (optional for algorithms needing incoming neighbors)
+  wgslOut << "@group(0) @binding(2) var<storage, read> rev_adj_offsets: array<u32>;\n";
+  wgslOut << "@group(0) @binding(3) var<storage, read> rev_adj_data: array<u32>;\n";
+  // Params and result
   wgslOut << "struct Params { node_count: u32; _pad0: u32; _pad1: u32; _pad2: u32; };\n";
-  wgslOut << "@group(0) @binding(2) var<uniform> params: Params;\n";
-  wgslOut << "@group(0) @binding(3) var<storage, read_write> result: atomic<u32>;\n";
+  wgslOut << "@group(0) @binding(4) var<uniform> params: Params;\n";
+  wgslOut << "@group(0) @binding(5) var<storage, read_write> result: atomic<u32>;\n";
   if (!propInfos.empty()) {
     for (const auto &p : propInfos) {
       // Use atomic<u32> backing for all properties to support atomic ops and float CAS via bitcast
@@ -672,6 +688,16 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
   wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
   wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
   wgslOut << "    let newVal: f32 = oldVal + val;\n";
+  wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
+  wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
+  wgslOut << "    if (res.exchanged) { return oldVal; }\n";
+  wgslOut << "  }\n";
+  wgslOut << "}\n";
+  wgslOut << "fn atomicSubF32(ptr: ptr<storage, atomic<u32>>, val: f32) -> f32 {\n";
+  wgslOut << "  loop {\n";
+  wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
+  wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
+  wgslOut << "    let newVal: f32 = oldVal - val;\n";
   wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
   wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
   wgslOut << "    if (res.exchanged) { return oldVal; }\n";
@@ -699,12 +725,50 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
   wgslOut << "}\n\n";
   wgslOut << "/**\n";
   wgslOut << " * Checks if there's an edge between vertices u and w\n";
+  wgslOut << " * Uses binary search for sorted adjacency lists (O(log n))\n";
+  wgslOut << " * Falls back to linear search for unsorted lists\n";
   wgslOut << " */\n";
   wgslOut << "fn findEdge(u: u32, w: u32) -> bool {\n";
-  wgslOut << "  for (var e = adj_offsets[u]; e < adj_offsets[u + 1u]; e = e + 1u) {\n";
-  wgslOut << "    if (adj_data[e] == w) { return true; }\n";
+  wgslOut << "  let start = adj_offsets[u];\n";
+  wgslOut << "  let end = adj_offsets[u + 1u];\n";
+  wgslOut << "  let degree = end - start;\n";
+  wgslOut << "  \n";
+  wgslOut << "  // For small degree (< 8), use linear search\n";
+  wgslOut << "  if (degree < 8u) {\n";
+  wgslOut << "    for (var e = start; e < end; e = e + 1u) {\n";
+  wgslOut << "      if (adj_data[e] == w) { return true; }\n";
+  wgslOut << "    }\n";
+  wgslOut << "    return false;\n";
+  wgslOut << "  }\n";
+  wgslOut << "  \n";
+  wgslOut << "  // Binary search for larger degrees (assumes sorted adjacency)\n";
+  wgslOut << "  var left = start;\n";
+  wgslOut << "  var right = end;\n";
+  wgslOut << "  while (left < right) {\n";
+  wgslOut << "    let mid = left + (right - left) / 2u;\n";
+  wgslOut << "    let mid_val = adj_data[mid];\n";
+  wgslOut << "    if (mid_val == w) {\n";
+  wgslOut << "      return true;\n";
+  wgslOut << "    } else if (mid_val < w) {\n";
+  wgslOut << "      left = mid + 1u;\n";
+  wgslOut << "    } else {\n";
+  wgslOut << "      right = mid;\n";
+  wgslOut << "    }\n";
   wgslOut << "  }\n";
   wgslOut << "  return false;\n";
+  wgslOut << "}\n\n";
+  
+  wgslOut << "/**\n";
+  wgslOut << " * Returns the edge index for edge from u to w\n";
+  wgslOut << " * Returns 0xFFFFFFFFu if edge not found\n";
+  wgslOut << " */\n";
+  wgslOut << "fn getEdgeIndex(u: u32, w: u32) -> u32 {\n";
+  wgslOut << "  let start = adj_offsets[u];\n";
+  wgslOut << "  let end = adj_offsets[u + 1u];\n";
+  wgslOut << "  for (var e = start; e < end; e = e + 1u) {\n";
+  wgslOut << "    if (adj_data[e] == w) { return e; }\n";
+  wgslOut << "  }\n";
+  wgslOut << "  return 0xFFFFFFFFu; // Edge not found\n";
   wgslOut << "}\n\n";
   
   // --- Main Entry Point ---
@@ -1010,7 +1074,7 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
                   
                 case OPERATOR_SUB:
                   if (wgslType == "f32") {
-                    wgslOut << indent << "atomicAddF32(&" << arr << "[" << indexExpr << "], -f32(";
+                    wgslOut << indent << "atomicSubF32(&" << arr << "[" << indexExpr << "], f32(";
                     generateWGSLExpr(right, wgslOut, indexVar);
                     wgslOut << "));\n";
                   } else {
@@ -1475,6 +1539,21 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
               generateWGSLStatement(fa->getBody(), wgslOut, indexVar, indentLevel + 1);
             }
             wgslOut << indent << "}\n";
+          } else if (methodName == "nodes_to") {
+            // Generate incoming neighbor iteration loop (reverse edges)
+            wgslOut << indent << "for (var edge = rev_adj_offsets[" << indexVar << "]; edge < rev_adj_offsets[" << indexVar << " + 1u]; edge = edge + 1u) {\n";
+            wgslOut << indent << "  let " << fa->getIterator()->getIdentifier() << " = rev_adj_data[edge];\n";
+            // Check filter condition if present
+            if (fa->hasFilterExpr()) {
+              wgslOut << indent << "  if (";
+              generateWGSLExpr(fa->getfilterExpr(), wgslOut, indexVar);
+              wgslOut << ") {\n";
+              generateWGSLStatement(fa->getBody(), wgslOut, indexVar, indentLevel + 2);
+              wgslOut << indent << "  }\n";
+            } else {
+              generateWGSLStatement(fa->getBody(), wgslOut, indexVar, indentLevel + 1);
+            }
+            wgslOut << indent << "}\n";
           } else {
             // Handle other iteration types (e.g., g.nodes())
             generateWGSLStatement(fa->getBody(), wgslOut, indexVar, indentLevel);
@@ -1575,6 +1654,16 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
             if (arg->isExpr()) { generateWGSLExpr(arg->getExpr(), wgslOut, indexVar); }
             wgslOut << "])";
           } else { wgslOut << "0"; }
+        } else if (methodName == "count_inNbrs") {
+          list<argument*> argList = proc->getArgList();
+          if (!argList.empty()) {
+            argument* arg = argList.front();
+            wgslOut << "(rev_adj_offsets[";
+            if (arg->isExpr()) { generateWGSLExpr(arg->getExpr(), wgslOut, indexVar); }
+            wgslOut << " + 1] - rev_adj_offsets[";
+            if (arg->isExpr()) { generateWGSLExpr(arg->getExpr(), wgslOut, indexVar); }
+            wgslOut << "])";
+          } else { wgslOut << "0"; }
         } else if (methodName == "is_an_edge") {
           // Map to helper
           list<argument*> argList = proc->getArgList();
@@ -1617,6 +1706,23 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
           } else {
             wgslOut << "0";
           }
+        } else if (methodName == "count_inNbrs") {
+          // Generate incoming neighbor count: rev_adj_offsets[v+1] - rev_adj_offsets[v]
+          list<argument*> argList = proc->getArgList();
+          if (!argList.empty()) {
+            argument* arg = argList.front();
+            wgslOut << "(rev_adj_offsets[";
+            if (arg->isExpr()) {
+              generateWGSLExpr(arg->getExpr(), wgslOut, indexVar);
+            }
+            wgslOut << " + 1] - rev_adj_offsets[";
+            if (arg->isExpr()) {
+              generateWGSLExpr(arg->getExpr(), wgslOut, indexVar);
+            }
+            wgslOut << "])";
+          } else {
+            wgslOut << "0";
+          }
         } else if (methodName == "is_an_edge") {
           // Generate edge existence check
           list<argument*> argList = proc->getArgList();
@@ -1638,6 +1744,33 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
           } else {
             wgslOut << "true"; // Fallback
           }
+        } else if (methodName == "get_edge") {
+          // Generate edge index lookup: getEdgeIndex(u, v)
+          list<argument*> argList = proc->getArgList();
+          if (argList.size() >= 2) {
+            auto it = argList.begin();
+            argument* arg1 = *it;
+            ++it;
+            argument* arg2 = *it;
+            
+            wgslOut << "getEdgeIndex(";
+            if (arg1->isExpr()) {
+              generateWGSLExpr(arg1->getExpr(), wgslOut, indexVar);
+            }
+            wgslOut << ", ";
+            if (arg2->isExpr()) {
+              generateWGSLExpr(arg2->getExpr(), wgslOut, indexVar);
+            }
+            wgslOut << ")";
+          } else {
+            wgslOut << "0xFFFFFFFFu"; // Fallback
+          }
+        } else if (methodName == "num_nodes") {
+          // Generate node count from params
+          wgslOut << "params.node_count";
+        } else if (methodName == "num_edges") {
+          // Generate edge count: total size of adj_data array
+          wgslOut << "arrayLength(&adj_data)";
         } else {
           wgslOut << "true"; // Other procedure calls
         }
@@ -1767,6 +1900,7 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
           proc_callExpr* proc = static_cast<proc_callExpr*>(node);
           if (proc && proc->getMethodId()) {
             std::string methodName = proc->getMethodId()->getIdentifier();
+
             if (methodName == "is_an_edge") {
               // Generate edge existence check
               list<argument*> argList = proc->getArgList();
@@ -1806,6 +1940,50 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
               } else {
                 wgslOut << "0"; // Fallback
               }
+            } else if (methodName == "count_inNbrs") {
+              // Generate incoming neighbor count: rev_adj_offsets[v+1] - rev_adj_offsets[v]
+              list<argument*> argList = proc->getArgList();
+              if (!argList.empty()) {
+                argument* arg = argList.front();
+                wgslOut << "(rev_adj_offsets[";
+                if (arg->isExpr()) {
+                  generateWGSLExpr(arg->getExpr(), wgslOut, indexVar);
+                }
+                wgslOut << " + 1] - rev_adj_offsets[";
+                if (arg->isExpr()) {
+                  generateWGSLExpr(arg->getExpr(), wgslOut, indexVar);
+                }
+                wgslOut << "])";
+              } else {
+                wgslOut << "0"; // Fallback
+              }
+            } else if (methodName == "get_edge") {
+              // Generate edge index lookup: getEdgeIndex(u, v)
+              list<argument*> argList = proc->getArgList();
+              if (argList.size() >= 2) {
+                auto it = argList.begin();
+                argument* arg1 = *it;
+                ++it;
+                argument* arg2 = *it;
+                
+                wgslOut << "getEdgeIndex(";
+                if (arg1->isExpr()) {
+                  generateWGSLExpr(arg1->getExpr(), wgslOut, indexVar);
+                }
+                wgslOut << ", ";
+                if (arg2->isExpr()) {
+                  generateWGSLExpr(arg2->getExpr(), wgslOut, indexVar);
+                }
+                wgslOut << ")";
+              } else {
+                wgslOut << "0xFFFFFFFFu"; // Fallback
+              }
+            } else if (methodName == "num_nodes") {
+              // Generate node count from params
+              wgslOut << "params.node_count";
+            } else if (methodName == "num_edges") {
+              // Generate edge count: total size of adj_data array
+              wgslOut << "arrayLength(&adj_data)";
             } else if (methodName == "Min") {
               // Handle Min() function calls
               list<argument*> argList = proc->getArgList();
@@ -2032,7 +2210,7 @@ void dsl_webgpu_generator::generateFixedPoint(fixedPointStmt* fp, std::ofstream&
           emitWGSLKernel(kernelName, forall->getBody());
           
           // Generate kernel launch
-          out << "    const kernel_res_" << kernelCounter << " = await launchkernel_" << kernelCounter << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, propertyBuffer, nodeCount);\n";
+          out << "    const kernel_res_" << kernelCounter << " = await launchkernel_" << kernelCounter << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, propertyBuffer, nodeCount, rev_adj_dataBuffer, rev_adj_offsetsBuffer);\n";
           out << "    if (kernel_res_" << kernelCounter << " > 0) " << fpVarName << " = false; // Changes occurred\n";
           
           kernelCounter++;
@@ -2057,7 +2235,7 @@ void dsl_webgpu_generator::generateFixedPoint(fixedPointStmt* fp, std::ofstream&
 void dsl_webgpu_generator::buildPropertyRegistry(Function* func) {
   propInfos.clear();
   if (!func) return;
-  int nextBinding = 4;
+  int nextBinding = 6; // Updated: bindings 0-1 forward CSR, 2-3 reverse CSR, 4 params, 5 result
   for (formalParam* fp : func->getParamList()) {
     if (!fp) continue;
     Type* t = fp->getType();
@@ -2069,6 +2247,7 @@ void dsl_webgpu_generator::buildPropertyRegistry(Function* func) {
       pi.wgslType = mapTypeToWGSL(t->getInnerTargetType());
       pi.bindingIndex = nextBinding++;
       pi.isReadWrite = true;
+      pi.isEdgeProperty = t->isPropEdgeType(); // true for edge properties, false for node properties
       propInfos.push_back(pi);
     }
   }
