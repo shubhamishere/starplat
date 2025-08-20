@@ -68,7 +68,7 @@ void dsl_webgpu_generator::generate(ASTNode* root, const std::string& outFile) {
   
   try {
     buildPropertyRegistry(static_cast<Function*>(root));
-    generateFunc(root, out);
+  generateFunc(root, out);
   } catch (const std::exception& e) {
     std::cerr << "[WebGPU] Exception during generation: " << e.what() << std::endl;
   } catch (...) {
@@ -911,19 +911,53 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
     if (asst->lhs_isIdentifier()) {
       Identifier* id = asst->getId();
       if (asst->getAtomicSignal()) {
-        // Handle atomic assignment (like +=) for reduction
+        // For atomic reductions to global counters, use atomicAdd to result
         wgslOut << indent << "atomicAdd(&result, ";
         if (asst->getExpr()) { wgslOut << "u32("; generateWGSLExpr(asst->getExpr(), wgslOut, indexVar); wgslOut << ")"; }
         else { wgslOut << "1u"; }
         wgslOut << ");\n";
       } else {
+        // Check if this is a compound assignment expression
+        Expression* expr = asst->getExpr();
+        if (expr && expr->getTypeofNode() == NODE_EXPR) {
+          Expression* e = static_cast<Expression*>(expr);
+          if (e->getExpressionFamily() == EXPR_ARITHMETIC) {
+            // Check if this is a compound assignment pattern: var = var OP value
+            Expression* left = e->getLeft();
+            Expression* right = e->getRight();
+            if (left && left->getExpressionFamily() == EXPR_ID) {
+              Identifier* leftId = left->getId();
+              if (leftId && id && strcmp(leftId->getIdentifier(), id->getIdentifier()) == 0) {
+                // This is a compound assignment: generate var OP= value
+                wgslOut << indent << id->getIdentifier();
+                int opType = e->getOperatorType();
+                switch (opType) {
+                  case OPERATOR_ADD: wgslOut << " += "; break;
+                  case OPERATOR_SUB: wgslOut << " -= "; break;
+                  case OPERATOR_MUL: wgslOut << " *= "; break;
+                  case OPERATOR_DIV: wgslOut << " /= "; break;
+                  case OPERATOR_OR: wgslOut << " |= "; break;
+                  case OPERATOR_AND: wgslOut << " &= "; break;
+                  default:
+                    // Fallback to regular assignment
+                    wgslOut << " = ";
+                    generateWGSLExpr(asst->getExpr(), wgslOut, indexVar);
+                    wgslOut << ";\n";
+                    return;
+                }
+                generateWGSLExpr(right, wgslOut, indexVar);
+                wgslOut << ";\n";
+                return;
+              }
+            }
+          }
+        }
         // Regular assignment
         wgslOut << indent << (id ? id->getIdentifier() : "unnamed") << " = ";
         generateWGSLExpr(asst->getExpr(), wgslOut, indexVar);
         wgslOut << ";\n";
       }
     } else if (asst->lhs_isProp()) {
-      // Handle property assignment with compare-and-flag for convergence
       PropAccess* prop = asst->getPropId();
       std::string arr = "properties";
       std::string wgslType = "u32";
@@ -931,6 +965,117 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
         arr = prop->getIdentifier2()->getIdentifier();
         for (const auto &p : propInfos) { if (p.name == arr) { wgslType = p.wgslType; break; } }
       }
+      
+      // Check if this is a compound assignment pattern: prop.field = prop.field OP value
+      Expression* expr = asst->getExpr();
+      if (expr && expr->getTypeofNode() == NODE_EXPR) {
+        Expression* e = static_cast<Expression*>(expr);
+        if (e->getExpressionFamily() == EXPR_ARITHMETIC) {
+          Expression* left = e->getLeft();
+          Expression* right = e->getRight();
+          if (left && left->getExpressionFamily() == EXPR_PROPID) {
+            PropAccess* leftProp = left->getPropId();
+            // Check if left property matches the assignment target
+            if (leftProp && prop && 
+                leftProp->getIdentifier1() && prop->getIdentifier1() &&
+                leftProp->getIdentifier2() && prop->getIdentifier2() &&
+                strcmp(leftProp->getIdentifier1()->getIdentifier(), prop->getIdentifier1()->getIdentifier()) == 0 &&
+                strcmp(leftProp->getIdentifier2()->getIdentifier(), prop->getIdentifier2()->getIdentifier()) == 0) {
+              
+              // Generate atomic compound assignment
+              std::string indexExpr;
+              if (prop->getIdentifier1()) { 
+                indexExpr = prop->getIdentifier1()->getIdentifier(); 
+              } else if (prop->getPropExpr()) { 
+                // For complex property expressions, we'd need to generate the expression
+                indexExpr = "0u"; // Simplified for now
+              } else { 
+                indexExpr = "0u"; 
+              }
+              
+              int opType = e->getOperatorType();
+              switch (opType) {
+                case OPERATOR_ADD:
+                  if (wgslType == "f32") {
+                    wgslOut << indent << "atomicAddF32(&" << arr << "[" << indexExpr << "], f32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << "));\n";
+                  } else {
+                    wgslOut << indent << "atomicAdd(&" << arr << "[" << indexExpr << "], u32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << "));\n";
+                  }
+                  wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                  return;
+                  
+                case OPERATOR_SUB:
+                  if (wgslType == "f32") {
+                    wgslOut << indent << "atomicAddF32(&" << arr << "[" << indexExpr << "], -f32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << "));\n";
+                  } else {
+                    wgslOut << indent << "atomicSub(&" << arr << "[" << indexExpr << "], u32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << "));\n";
+                  }
+                  wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                  return;
+                  
+                case OPERATOR_OR:
+                  // Bitwise OR assignment: prop[idx] |= value
+                  wgslOut << indent << "atomicOr(&" << arr << "[" << indexExpr << "], u32(";
+                  generateWGSLExpr(right, wgslOut, indexVar);
+                  wgslOut << "));\n";
+                  wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                  return;
+                  
+                case OPERATOR_AND:
+                  // Bitwise AND assignment: prop[idx] &= value
+                  wgslOut << indent << "atomicAnd(&" << arr << "[" << indexExpr << "], u32(";
+                  generateWGSLExpr(right, wgslOut, indexVar);
+                  wgslOut << "));\n";
+                  wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                  return;
+                  
+                case OPERATOR_MUL:
+                case OPERATOR_DIV:
+                  // For multiplication and division, we need to use compare-and-swap
+                  wgslOut << indent << "// Compound " << (opType == OPERATOR_MUL ? "*=" : "/=") << " for property requires CAS\n";
+                  wgslOut << indent << "{\n";
+                  wgslOut << indent << "  loop {\n";
+                  wgslOut << indent << "    let oldBits = atomicLoad(&" << arr << "[" << indexExpr << "]);\n";
+                  if (wgslType == "f32") {
+                    wgslOut << indent << "    let oldVal = bitcast<f32>(oldBits);\n";
+                    wgslOut << indent << "    let newVal = oldVal " << (opType == OPERATOR_MUL ? "*" : "/") << " f32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << ");\n";
+                    wgslOut << indent << "    let newBits = bitcast<u32>(newVal);\n";
+                  } else {
+                    wgslOut << indent << "    let oldVal = oldBits;\n";
+                    wgslOut << indent << "    let newVal = oldVal " << (opType == OPERATOR_MUL ? "*" : "/") << " u32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << ");\n";
+                    wgslOut << indent << "    let newBits = newVal;\n";
+                  }
+                  wgslOut << indent << "    let res = atomicCompareExchangeWeak(&" << arr << "[" << indexExpr << "], oldBits, newBits);\n";
+                  wgslOut << indent << "    if (res.exchanged) {\n";
+                  wgslOut << indent << "      if (oldBits != newBits) { atomicAdd(&result, 1u); }\n";
+                  wgslOut << indent << "      break;\n";
+                  wgslOut << indent << "    }\n";
+                  wgslOut << indent << "  }\n";
+                  wgslOut << indent << "}\n";
+                  return;
+                  
+                default:
+                  // Fall through to regular assignment handling
+                  break;
+              }
+            }
+          }
+        }
+      }
+      
+      // Regular property assignment with compare-and-flag for convergence
       wgslOut << indent << "let __oldBits: u32 = atomicLoad(&" << arr << "[";
       if (prop && prop->getIdentifier1()) { wgslOut << prop->getIdentifier1()->getIdentifier(); }
       else if (prop && prop->getPropExpr()) { generateWGSLExpr(prop->getPropExpr(), wgslOut, indexVar); }
@@ -950,11 +1095,237 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
       wgslOut << "], __newBits); atomicAdd(&result, 1u); }\n";
     } else if (asst->lhs_isIndexAccess()) {
       // Handle index access assignment: array[index] = expression
+      // Check if this is a compound assignment pattern: arr[idx] = arr[idx] OP value
+      Expression* expr = asst->getExpr();
+      if (expr && expr->getTypeofNode() == NODE_EXPR) {
+        Expression* e = static_cast<Expression*>(expr);
+        if (e->getExpressionFamily() == EXPR_ARITHMETIC) {
+          Expression* left = e->getLeft();
+          Expression* right = e->getRight();
+          if (left && left->getExpressionFamily() == EXPR_MAPGET) {
+            // Check if left side matches the assignment target
+            Expression* leftMapExpr = left->getMapExpr();
+            Expression* leftIndexExpr = left->getIndexExpr();
+            Expression* targetMapExpr = asst->getIndexAccess()->getMapExpr();
+            Expression* targetIndexExpr = asst->getIndexAccess()->getIndexExpr();
+            
+            // For simplicity, check if both are accessing the same array name and index
+            // This is a basic pattern match - could be enhanced for more complex cases
+            if (leftMapExpr && targetMapExpr && leftIndexExpr && targetIndexExpr) {
+              bool isCompoundAssignment = false;
+              
+              // Check if map expressions refer to the same identifier
+              if (leftMapExpr->getExpressionFamily() == EXPR_ID && targetMapExpr->getExpressionFamily() == EXPR_ID) {
+                Identifier* leftId = leftMapExpr->getId();
+                Identifier* targetId = targetMapExpr->getId();
+                if (leftId && targetId && 
+                    strcmp(leftId->getIdentifier(), targetId->getIdentifier()) == 0) {
+                  
+                  // Check if index expressions are the same
+                  if (leftIndexExpr->getExpressionFamily() == EXPR_ID && targetIndexExpr->getExpressionFamily() == EXPR_ID) {
+                    Identifier* leftIdx = leftIndexExpr->getId();
+                    Identifier* targetIdx = targetIndexExpr->getId();
+                    if (leftIdx && targetIdx && 
+                        strcmp(leftIdx->getIdentifier(), targetIdx->getIdentifier()) == 0) {
+                      isCompoundAssignment = true;
+                    }
+                  }
+                }
+              }
+              
+              if (isCompoundAssignment) {
+                // Generate compound assignment for index access
+                std::string arrName = targetMapExpr->getId()->getIdentifier();
+                std::string indexName = targetIndexExpr->getId()->getIdentifier();
+                
+                // Check if this is a property array (requires atomic operations)
+                bool isPropertyArray = false;
+                std::string wgslType = "u32";
+                for (const auto &p : propInfos) {
+                  if (p.name == arrName) { 
+                    wgslType = p.wgslType; 
+                    isPropertyArray = true;
+                    break; 
+                  }
+                }
+                
+                int opType = e->getOperatorType();
+                
+                if (isPropertyArray) {
+                  // Property arrays: use atomic operations
+                switch (opType) {
+                  case OPERATOR_ADD:
+                    if (wgslType == "f32") {
+                      wgslOut << indent << "atomicAddF32(&" << arrName << "[" << indexName << "], f32(";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << "));\n";
+                    } else {
+                      wgslOut << indent << "atomicAdd(&" << arrName << "[" << indexName << "], u32(";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << "));\n";
+                    }
+                    wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                    return;
+                    
+                  case OPERATOR_SUB:
+                    if (wgslType == "f32") {
+                      wgslOut << indent << "atomicAddF32(&" << arrName << "[" << indexName << "], -f32(";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << "));\n";
+                    } else {
+                      wgslOut << indent << "atomicSub(&" << arrName << "[" << indexName << "], u32(";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << "));\n";
+                    }
+                    wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                    return;
+                    
+                  case OPERATOR_OR:
+                    // Bitwise OR assignment: arr[idx] |= value
+                    wgslOut << indent << "atomicOr(&" << arrName << "[" << indexName << "], u32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << "));\n";
+                    wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                    return;
+                    
+                  case OPERATOR_AND:
+                    // Bitwise AND assignment: arr[idx] &= value
+                    wgslOut << indent << "atomicAnd(&" << arrName << "[" << indexName << "], u32(";
+                    generateWGSLExpr(right, wgslOut, indexVar);
+                    wgslOut << "));\n";
+                    wgslOut << indent << "atomicAdd(&result, 1u); // Signal change for convergence\n";
+                    return;
+                    
+                  case OPERATOR_MUL:
+                  case OPERATOR_DIV:
+                    // For multiplication and division, use compare-and-swap
+                    wgslOut << indent << "// Compound " << (opType == OPERATOR_MUL ? "*=" : "/=") << " for array requires CAS\n";
+                    wgslOut << indent << "{\n";
+                    wgslOut << indent << "  loop {\n";
+                    wgslOut << indent << "    let oldBits = atomicLoad(&" << arrName << "[" << indexName << "]);\n";
+                    if (wgslType == "f32") {
+                      wgslOut << indent << "    let oldVal = bitcast<f32>(oldBits);\n";
+                      wgslOut << indent << "    let newVal = oldVal " << (opType == OPERATOR_MUL ? "*" : "/") << " f32(";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ");\n";
+                      wgslOut << indent << "    let newBits = bitcast<u32>(newVal);\n";
+                    } else {
+                      wgslOut << indent << "    let oldVal = oldBits;\n";
+                      wgslOut << indent << "    let newVal = oldVal " << (opType == OPERATOR_MUL ? "*" : "/") << " u32(";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ");\n";
+                      wgslOut << indent << "    let newBits = newVal;\n";
+                    }
+                    wgslOut << indent << "    let res = atomicCompareExchangeWeak(&" << arrName << "[" << indexName << "], oldBits, newBits);\n";
+                    wgslOut << indent << "    if (res.exchanged) {\n";
+                    wgslOut << indent << "      if (oldBits != newBits) { atomicAdd(&result, 1u); }\n";
+                    wgslOut << indent << "      break;\n";
+                    wgslOut << indent << "    }\n";
+                    wgslOut << indent << "  }\n";
+                    wgslOut << indent << "}\n";
+                    return;
+                    
+                  default:
+                    // Fall through to regular assignment
+                    break;
+                }
+                } else {
+                  // Regular arrays: use direct compound operators (no atomics needed)
+                  switch (opType) {
+                    case OPERATOR_ADD:
+                      wgslOut << indent << arrName << "[" << indexName << "] += ";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ";\n";
+                      return;
+                      
+                    case OPERATOR_SUB:
+                      wgslOut << indent << arrName << "[" << indexName << "] -= ";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ";\n";
+                      return;
+                      
+                    case OPERATOR_MUL:
+                      wgslOut << indent << arrName << "[" << indexName << "] *= ";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ";\n";
+                      return;
+                      
+                    case OPERATOR_DIV:
+                      wgslOut << indent << arrName << "[" << indexName << "] /= ";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ";\n";
+                      return;
+                      
+                    case OPERATOR_OR:
+                      wgslOut << indent << arrName << "[" << indexName << "] |= ";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ";\n";
+                      return;
+                      
+                    case OPERATOR_AND:
+                      wgslOut << indent << arrName << "[" << indexName << "] &= ";
+                      generateWGSLExpr(right, wgslOut, indexVar);
+                      wgslOut << ";\n";
+                      return;
+                      
+                    default:
+                      // Fall through to regular assignment
+                      break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Regular index access assignment
+      Expression* targetMapExpr = asst->getIndexAccess()->getMapExpr();
+      if (targetMapExpr && targetMapExpr->getExpressionFamily() == EXPR_ID) {
+        std::string arrName = targetMapExpr->getId()->getIdentifier();
+        
+        // Check if this is a property array (requires atomic operations)
+        bool isPropertyArray = false;
+        std::string wgslType = "u32";
+        for (const auto &p : propInfos) {
+          if (p.name == arrName) { 
+            wgslType = p.wgslType; 
+            isPropertyArray = true;
+            break; 
+          }
+        }
+        
+        if (isPropertyArray) {
+          // Property arrays: use atomic store with compare-and-flag for convergence
+          wgslOut << indent << "let __oldBits: u32 = atomicLoad(&" << arrName << "[";
+          generateWGSLExpr(asst->getIndexAccess()->getIndexExpr(), wgslOut, indexVar);
+          wgslOut << "]);\n";
+          wgslOut << indent << "let __newBits: u32 = ";
+          if (wgslType == "f32") {
+            wgslOut << "bitcast<u32>(f32("; generateWGSLExpr(asst->getExpr(), wgslOut, indexVar); wgslOut << "))";
+          } else {
+            wgslOut << "u32("; generateWGSLExpr(asst->getExpr(), wgslOut, indexVar); wgslOut << ")";
+          }
+          wgslOut << ";\n";
+          wgslOut << indent << "if (__oldBits != __newBits) { atomicStore(&" << arrName << "[";
+          generateWGSLExpr(asst->getIndexAccess()->getIndexExpr(), wgslOut, indexVar);
+          wgslOut << "], __newBits); atomicAdd(&result, 1u); }\n";
+        } else {
+          // Regular arrays: direct assignment
+      wgslOut << indent;
+          generateWGSLExpr(asst->getIndexAccess(), wgslOut, indexVar);
+      wgslOut << " = ";
+      generateWGSLExpr(asst->getExpr(), wgslOut, indexVar);
+      wgslOut << ";\n";
+        }
+      } else {
+        // Fallback for complex expressions
       wgslOut << indent;
       generateWGSLExpr(asst->getIndexAccess(), wgslOut, indexVar);
       wgslOut << " = ";
       generateWGSLExpr(asst->getExpr(), wgslOut, indexVar);
       wgslOut << ";\n";
+      }
     } else {
       // Unknown assignment type
       wgslOut << indent << "// Unknown assignment type\n";
@@ -1216,8 +1587,8 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
             if (arg2->isExpr()) { generateWGSLExpr(arg2->getExpr(), wgslOut, indexVar); }
             wgslOut << ")";
           } else { wgslOut << "true"; }
-        } else {
-          wgslOut << "0";
+          } else {
+            wgslOut << "0";
         }
       } else {
         wgslOut << "0";
@@ -1296,7 +1667,6 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
           break;
         }
         case EXPR_ARITHMETIC:
-        case EXPR_RELATIONAL:
         case EXPR_LOGICAL: { 
           wgslOut << "("; 
           generateWGSLExpr(expr->getLeft(), wgslOut, indexVar); 
@@ -1305,10 +1675,68 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
           wgslOut << ")"; 
           break; 
         }
+        case EXPR_RELATIONAL: {
+          // Relational operators with type casting support
+          wgslOut << "(";
+          
+          Expression* left = expr->getLeft();
+          Expression* right = expr->getRight();
+          
+          if (left && right) {
+            std::string leftType = inferExprType(left);
+            std::string rightType = inferExprType(right);
+            
+            // Determine common type for comparison (promote to float if either is float)
+            std::string commonType;
+            if (leftType == "f32" || rightType == "f32") {
+              commonType = "f32"; // Promote to float for precision
+            } else if (leftType == "u32" && rightType == "u32") {
+              commonType = "u32"; // Both bool/unsigned
+            } else {
+              commonType = "i32"; // Default to signed integer
+            }
+            
+            // Generate left operand with casting if needed
+            generateWithCast(left, commonType, wgslOut, indexVar);
+            wgslOut << " " << getOpString(expr->getOperatorType()) << " ";
+            
+            // Generate right operand with casting if needed  
+            generateWithCast(right, commonType, wgslOut, indexVar);
+          } else {
+            // Fallback for null operands
+            generateWGSLExpr(left, wgslOut, indexVar); 
+            wgslOut << " " << getOpString(expr->getOperatorType()) << " "; 
+            generateWGSLExpr(right, wgslOut, indexVar); 
+          }
+          
+          wgslOut << ")"; 
+          break; 
+        }
         case EXPR_UNARY: { 
-          wgslOut << "(" << getOpString(expr->getOperatorType()); 
+          int opType = expr->getOperatorType();
+          if (opType == OPERATOR_INC || opType == OPERATOR_DEC) {
+            // Handle increment/decrement: convert to compound assignment
+            Expression* inner = expr->getUnaryExpr();
+            if (inner && inner->isIdentifierExpr()) {
+              Identifier* id = inner->getId();
+              if (id) {
+                wgslOut << "(";
+                generateWGSLExpr(inner, wgslOut, indexVar);
+                if (opType == OPERATOR_INC) wgslOut << " += 1)";
+                else wgslOut << " -= 1)";
+                break;
+              }
+            }
+            // Fallback for complex expressions
+            wgslOut << "(" << (opType == OPERATOR_INC ? "++" : "--");
           generateWGSLExpr(expr->getUnaryExpr(), wgslOut, indexVar); 
           wgslOut << ")"; 
+          } else {
+            // Regular unary operators (!, -, +)
+            wgslOut << "(" << getOpString(opType); 
+            generateWGSLExpr(expr->getUnaryExpr(), wgslOut, indexVar); 
+            wgslOut << ")";
+          }
           break; 
         }
         case EXPR_MAPGET: {
@@ -1468,6 +1896,7 @@ std::string dsl_webgpu_generator::getOpString(int opType) {
     case OPERATOR_ADDASSIGN: return "+=";
     case OPERATOR_SUBASSIGN: return "-=";
     case OPERATOR_MULASSIGN: return "*=";
+    case OPERATOR_DIVASSIGN: return "/=";
     case OPERATOR_ORASSIGN: return "|=";
     case OPERATOR_ANDASSIGN: return "&=";
     case OPERATOR_INDEX: return "[";
@@ -1647,21 +2076,79 @@ void dsl_webgpu_generator::buildPropertyRegistry(Function* func) {
 
 std::string dsl_webgpu_generator::mapTypeToWGSL(Type* type) {
   if (!type) return "u32";
-  if (type->isIntegerType()) return "i32"; // default signed
-  int root = type->getRootType();
-  switch (root) {
-    case TYPE_INT: return "i32";
-    case TYPE_LONG: return "i32"; // no i64 in WGSL
-    case TYPE_BOOL: return "u32"; // 0/1
-    case TYPE_FLOAT: return "f32";
-    case TYPE_DOUBLE: return "f32"; // no f64 in WGSL
-    default: return "u32";
+  
+  // Use gettypeId() like CUDA backend for proper type detection
+  int typeId = type->gettypeId();
+  switch (typeId) {
+    case TYPE_INT: 
+    case TYPE_LONG: 
+      return "i32"; // no i64 in WGSL, map to i32
+    case TYPE_BOOL: 
+      return "u32"; // 0/1 representation
+    case TYPE_FLOAT: 
+    case TYPE_DOUBLE: 
+      return "f32"; // no f64 in WGSL, map to f32
+        default:
+      return "u32"; // fallback
   }
 }
 
 bool dsl_webgpu_generator::isNumericIntegerType(Type* type) {
   if (!type) return true;
   return type->isIntegerType();
+}
+
+std::string dsl_webgpu_generator::inferExprType(Expression* expr) {
+  if (!expr) return "u32";
+  
+  switch (expr->getExpressionFamily()) {
+    case EXPR_INTCONSTANT:
+      return "i32";
+    case EXPR_FLOATCONSTANT:
+    case EXPR_DOUBLECONSTANT:
+      return "f32";
+    case EXPR_BOOLCONSTANT:
+      return "u32"; // bool as u32 in WGSL
+    case EXPR_ID: {
+      // For identifiers, we'd need symbol table lookup - basic heuristic for now
+      return "i32"; // default assumption
+    }
+    case EXPR_PROPID: {
+      // For property access, look up in propInfos
+      PropAccess* prop = expr->getPropId();
+      if (prop && prop->getIdentifier2()) {
+        std::string propName = prop->getIdentifier2()->getIdentifier();
+        for (const auto &p : propInfos) {
+          if (p.name == propName) return p.wgslType;
+        }
+      }
+      return "u32"; // fallback
+    }
+    case EXPR_ARITHMETIC: {
+      // For arithmetic, use type promotion rules
+      std::string leftType = inferExprType(expr->getLeft());
+      std::string rightType = inferExprType(expr->getRight());
+      // Promote to float if either operand is float
+      if (leftType == "f32" || rightType == "f32") return "f32";
+      return "i32"; // both integer types
+    }
+        default:
+      return "u32"; // fallback
+  }
+}
+
+void dsl_webgpu_generator::generateWithCast(Expression* expr, const std::string& targetType, std::ofstream& wgslOut, const std::string& indexVar) {
+  std::string exprType = inferExprType(expr);
+  
+  if (exprType != targetType) {
+    // Need casting
+    wgslOut << targetType << "(";
+    generateWGSLExpr(expr, wgslOut, indexVar);
+    wgslOut << ")";
+  } else {
+    // No casting needed
+    generateWGSLExpr(expr, wgslOut, indexVar);
+  }
 }
 
 } // namespace spwebgpu

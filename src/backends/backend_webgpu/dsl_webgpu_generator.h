@@ -51,6 +51,10 @@ private:
   void buildPropertyRegistry(Function* func);
   std::string mapTypeToWGSL(Type* type);
   bool isNumericIntegerType(Type* type);
+  
+  // Type inference helpers for coercion
+  std::string inferExprType(Expression* expr);
+  void generateWithCast(Expression* expr, const std::string& targetType, std::ofstream& wgslOut, const std::string& indexVar);
 };
 
 } // namespace spwebgpu

@@ -479,10 +479,11 @@ reduction : leftSide '=' reductionCall { $$=Util::createNodeForReductionStmt($1,
 
 
 reduce_op : T_ADD_ASSIGN {$$=OPERATOR_ADDASSIGN;};
+          | T_SUB_ASSIGN {$$=OPERATOR_SUBASSIGN;}
           | T_MUL_ASSIGN {$$=OPERATOR_MULASSIGN;}
+          | T_DIV_ASSIGN {$$=OPERATOR_DIVASSIGN;}
 		  | T_OR_ASSIGN  {$$=OPERATOR_ORASSIGN;}
 		  | T_AND_ASSIGN {$$=OPERATOR_ANDASSIGN;}
-		  | T_SUB_ASSIGN {$$=OPERATOR_SUBASSIGN;}
 
 leftList :  leftSide ',' leftList { $$=Util::addToNList($3,$1);
                                          };
