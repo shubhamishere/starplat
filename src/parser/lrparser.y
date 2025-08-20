@@ -802,12 +802,16 @@ int main(int argc,char **argv)
         cpp_backend.generate();
 	  }
       else if (strcmp(backendTarget, "webgpu") == 0) {
+        std::cout << "[DEBUG] Entering WebGPU backend section" << std::endl;
         const auto& funcList = frontEndContext.getFuncList();
+        std::cout << "[DEBUG] Got funcList, size: " << funcList.size() << std::endl;
         if (funcList.empty()) {
             std::cerr << "[WebGPU] Error: Function list is empty!" << std::endl;
         } else {
+            std::cout << "[DEBUG] Creating WebGPU generator" << std::endl;
             spwebgpu::dsl_webgpu_generator webgpu_backend;
             std::string outFile = "../graphcode/generated_webgpu/output.js";
+            std::cout << "[DEBUG] Calling generate with funcList.front()=" << funcList.front() << std::endl;
             webgpu_backend.generate(funcList.front(), outFile);
         }
       }

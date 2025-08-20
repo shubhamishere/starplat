@@ -1,4 +1,4 @@
-export async function Compute_TC(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount) {
+export async function Compute_TC(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount, props = {}) {
   console.log('[WebGPU] Compute start: Compute_TC with nodeCount=', nodeCount);
   let result = 0;
   const resultBuffer = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
@@ -7,6 +7,8 @@ export async function Compute_TC(device, adj_dataBuffer, adj_offsetsBuffer, node
   const paramsBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(paramsBuffer, 0, new Uint32Array([nodeCount, 0, 0, 0]));
   let triangle_count = 0;
+  // Reset result before dispatch
+  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));
   const kernel_res_0 = await launchkernel_0(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, propertyBuffer, nodeCount);
   result = kernel_res_0;
   // [WebGPU] ignoring DSL return in host orchestration
@@ -26,13 +28,14 @@ async function launchkernel_0(device, adj_dataBuffer, adj_offsetsBuffer, paramsB
       console[(m.type === 'error') ? 'error' : 'warn']('[WGSL]', m.type, s, m.message);
     }
   }
-  const bindGroupLayout = device.createBindGroupLayout({ entries: [
+  const bindEntries = [
     { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
     { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
     { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
-    { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-    { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-  ]});
+    { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
+  ];
+  bindEntries.push({ binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } });
+  const bindGroupLayout = device.createBindGroupLayout({ entries: bindEntries });
   const pipeline = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }), compute: { module: shaderModule, entryPoint: 'main' } });
   console.log('[WebGPU] launchkernel_0: pipeline created');
   
@@ -42,16 +45,14 @@ async function launchkernel_0(device, adj_dataBuffer, adj_offsetsBuffer, paramsB
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ 
   });
   
-  const bindGroup = device.createBindGroup({ 
-    layout: bindGroupLayout, 
-    entries: [
+  const entries = [
       { binding: 0, resource: { buffer: adj_offsetsBuffer } },
       { binding: 1, resource: { buffer: adj_dataBuffer } },
       { binding: 2, resource: { buffer: paramsBuffer } },
-      { binding: 3, resource: { buffer: resultBuffer } },
-      { binding: 4, resource: { buffer: propertyBuffer } }
-    ]
-  });
+      { binding: 3, resource: { buffer: resultBuffer } }
+  ];
+  entries.push({ binding: 4, resource: { buffer: propertyBuffer } });
+  const bindGroup = device.createBindGroup({ layout: bindGroupLayout, entries });
   console.log('[WebGPU] launchkernel_0: bindGroup created');
   
   const encoder = device.createCommandEncoder();

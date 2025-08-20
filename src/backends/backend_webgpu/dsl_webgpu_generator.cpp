@@ -40,20 +40,41 @@ dsl_webgpu_generator::dsl_webgpu_generator() {}
 dsl_webgpu_generator::~dsl_webgpu_generator() {}
 
 void dsl_webgpu_generator::generate(ASTNode* root, const std::string& outFile) {
+  std::cout << "[WebGPU] Generate called with root=" << root << ", outFile=" << outFile << std::endl;
   if (!root) {
     std::cerr << "[WebGPU] Error: root ASTNode is null!" << std::endl;
     return;
   }
+  
+  // Additional validation
+  try {
+    int nodeType = root->getTypeofNode();
+    std::cout << "[WebGPU] Root node type: " << nodeType << std::endl;
+    if (nodeType != NODE_FUNC) {
+      std::cerr << "[WebGPU] Error: Expected function node, got type: " << nodeType << std::endl;
+      return;
+    }
+  } catch (...) {
+    std::cerr << "[WebGPU] Error: Exception when accessing root node type!" << std::endl;
+    return;
+  }
+  
   std::ofstream out(outFile);
   if (!out.is_open()) {
     std::cerr << "[WebGPU] Failed to open output file: " << outFile << std::endl;
     return;
   }
   std::cout << "[WebGPU] Starting code generation for: " << outFile << std::endl;
-  if (root->getTypeofNode() == NODE_FUNC) {
+  
+  try {
     buildPropertyRegistry(static_cast<Function*>(root));
+    generateFunc(root, out);
+  } catch (const std::exception& e) {
+    std::cerr << "[WebGPU] Exception during generation: " << e.what() << std::endl;
+  } catch (...) {
+    std::cerr << "[WebGPU] Unknown exception during generation!" << std::endl;
   }
-  generateFunc(root, out);
+  
   out.close();
 }
 
@@ -105,11 +126,12 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   if (!propInfos.empty()) { out << "  const propEntries = [];\n"; }
   if (!propInfos.empty()) {
     for (const auto &p : propInfos) {
-      out << "  const " << p.name << "Buffer = (props['" << p.name << "'] && props['" << p.name << "'].buffer) ? props['" << p.name << "'].buffer : device.createBuffer({ size: Math.max(1, nodeCount) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });\n";
+      out << "  const " << p.name << "Buffer = (props['" << p.name << "'] && props['" << p.name << "'].buffer) ? props['" << p.name << "'].buffer : device.createBuffer({ size: (props['" << p.name << "'] && props['" << p.name << "'].data) ? props['" << p.name << "'].data.byteLength : Math.max(1, nodeCount) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });\n";
+      out << "  if (props['" << p.name << "'] && props['" << p.name << "'].data && !(props['" << p.name << "'].buffer)) { device.queue.writeBuffer(" << p.name << "Buffer, 0, props['" << p.name << "'].data); }\n";
       out << "  propEntries.push({ binding: " << p.bindingIndex << ", resource: { buffer: " << p.name << "Buffer } });\n";
     }
   } else {
-    out << "  const propertyBuffer = device.createBuffer({ size: Math.max(1, nodeCount) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });\n";
+  out << "  const propertyBuffer = device.createBuffer({ size: Math.max(1, nodeCount) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });\n";
   }
   out << "  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
   // Params uniform buffer for kernel constants (e.g., node_count)
@@ -118,6 +140,21 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   int launchIndex = 0;
   // Generate host-side sequencing for the function body
   generateHostBody(func->getBlockStatement(), out, launchIndex);
+  // Optional property readback for out/inout
+  if (!propInfos.empty()) {
+    for (const auto &p : propInfos) {
+      std::string jsCtor = (p.wgslType == "u32") ? "Uint32Array" : (p.wgslType == "i32") ? "Int32Array" : "Float32Array";
+      out << "  if (props['" << p.name << "'] && (props['" << p.name << "'].usage === 'out' || props['" << p.name << "'].usage === 'inout' || props['" << p.name << "'].readback === true)) {\n";
+      out << "    const sizeBytes_" << p.name << " = (props['" << p.name << "'].data) ? props['" << p.name << "'].data.byteLength : Math.max(1, nodeCount) * 4;\n";
+      out << "    const rb_" << p.name << " = device.createBuffer({ size: sizeBytes_" << p.name << ", usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });\n";
+      out << "    { const enc = device.createCommandEncoder(); enc.copyBufferToBuffer(" << p.name << "Buffer, 0, rb_" << p.name << ", 0, sizeBytes_" << p.name << "); device.queue.submit([enc.finish()]); }\n";
+      out << "    await rb_" << p.name << ".mapAsync(GPUMapMode.READ);\n";
+      out << "    const view_" << p.name << " = new " << jsCtor << "(rb_" << p.name << ".getMappedRange());\n";
+      out << "    props['" << p.name << "'].dataOut = new " << jsCtor << "(view_" << p.name << ");\n";
+      out << "    rb_" << p.name << ".unmap();\n";
+      out << "  }\n";
+    }
+  }
   out << "  console.log('[WebGPU] Compute end: returning result', " << resultVar << ");\n";
   out << "  return " << resultVar << ";\n";
   out << "}\n\n";
@@ -215,7 +252,9 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
   }
 
   if (node->getTypeofNode() == NODE_FORALLSTMT) {
-    out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, propertyBuffer, nodeCount);\n";
+    out << "  // Reset result before dispatch\n";
+    out << "  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
+    out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount);\n";
     // Assign to generic result for now
     out << "  result = kernel_res_" << launchIndex << ";\n";
     // If there is a scalar reduction target like 'triangle_count', keep it in sync
@@ -236,6 +275,8 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
     out << "  const maxFpIterations = 1000;\n";
     out << "  while (!" << fpVarName << " && fpIterations < maxFpIterations) {\n";
     out << "    " << fpVarName << " = true;\n";
+    // Reset result once per iteration to aggregate changes across inner kernels
+    out << "    device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
     if (fp->getBody()) {
       generateHostBody(fp->getBody(), out, launchIndex);
       // Heuristic: if any kernel produced non-zero result, mark not converged
@@ -243,6 +284,23 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
     }
     out << "    fpIterations++;\n";
     out << "  }\n";
+    return;
+  }
+
+  if (node->getTypeofNode() == NODE_DOWHILESTMT) {
+    dowhileStmt* dw = static_cast<dowhileStmt*>(node);
+    out << "  // Do-while loop (WebGPU host)\n";
+    out << "  let __dwIterations = 0; const __dwMax = 1000;\n";
+    out << "  do {\n";
+    out << "    device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
+    if (dw->getBody()) {
+      generateHostBody(dw->getBody(), out, launchIndex);
+    }
+    out << "    __dwIterations++;\n";
+    out << "  } while (";
+    if (dw->getCondition()) { generateExpr(dw->getCondition(), out); }
+    else { out << "false"; }
+    out << " && __dwIterations < __dwMax);\n";
     return;
   }
 
@@ -560,6 +618,26 @@ void dsl_webgpu_generator::generateExpr(ASTNode* node, std::ofstream& out) {
       }
       break;
     }
+    case NODE_PROCCALLSTMT: {
+      // A statement in an expression context: try to extract expr part safely
+      proc_callStmt* stmt = static_cast<proc_callStmt*>(node);
+      proc_callExpr* proc = stmt ? stmt->getProcCallExpr() : nullptr;
+      if (proc && proc->getMethodId()) {
+        // Re-dispatch through expression handling by constructing a minimal pathway
+        // Handle a few known calls used within expressions
+        std::string methodName = proc->getMethodId()->getIdentifier();
+        if (methodName == "is_an_edge") {
+          out << "true"; // placeholder on host
+        } else if (methodName == "count_outNbrs") {
+          out << "0"; // placeholder on host
+        } else {
+          out << "0";
+        }
+      } else {
+        out << "0";
+      }
+      break;
+    }
     default: out << "0"; break;
   }
 }
@@ -579,7 +657,7 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
   wgslOut << "@group(0) @binding(3) var<storage, read_write> result: atomic<u32>;\n";
   if (!propInfos.empty()) {
     for (const auto &p : propInfos) {
-      // For Phase 0, keep atomic<u32> representation for all properties to enable atomic reductions
+      // Use atomic<u32> backing for all properties to support atomic ops and float CAS via bitcast
       wgslOut << "@group(0) @binding(" << p.bindingIndex << ") var<storage, read_write> " << p.name << ": array<atomic<u32>>;\n";
     }
     wgslOut << "\n";
@@ -845,13 +923,31 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
         wgslOut << ";\n";
       }
     } else if (asst->lhs_isProp()) {
-      // Handle property assignment: v.deg = expression
+      // Handle property assignment with compare-and-flag for convergence
       PropAccess* prop = asst->getPropId();
-      wgslOut << indent;
-      generatePropertyAccess(prop, wgslOut, indexVar);
-      wgslOut << " = ";
-      generateWGSLExpr(asst->getExpr(), wgslOut, indexVar);
+      std::string arr = "properties";
+      std::string wgslType = "u32";
+      if (prop && prop->getIdentifier2() && prop->getIdentifier2()->getIdentifier()) {
+        arr = prop->getIdentifier2()->getIdentifier();
+        for (const auto &p : propInfos) { if (p.name == arr) { wgslType = p.wgslType; break; } }
+      }
+      wgslOut << indent << "let __oldBits: u32 = atomicLoad(&" << arr << "[";
+      if (prop && prop->getIdentifier1()) { wgslOut << prop->getIdentifier1()->getIdentifier(); }
+      else if (prop && prop->getPropExpr()) { generateWGSLExpr(prop->getPropExpr(), wgslOut, indexVar); }
+      else { wgslOut << "0u"; }
+      wgslOut << "]);\n";
+      wgslOut << indent << "let __newBits: u32 = ";
+      if (wgslType == "f32") {
+        wgslOut << "bitcast<u32>(f32("; generateWGSLExpr(asst->getExpr(), wgslOut, indexVar); wgslOut << "))";
+      } else {
+        wgslOut << "u32("; generateWGSLExpr(asst->getExpr(), wgslOut, indexVar); wgslOut << ")";
+      }
       wgslOut << ";\n";
+      wgslOut << indent << "if (__oldBits != __newBits) { atomicStore(&" << arr << "[";
+      if (prop && prop->getIdentifier1()) { wgslOut << prop->getIdentifier1()->getIdentifier(); }
+      else if (prop && prop->getPropExpr()) { generateWGSLExpr(prop->getPropExpr(), wgslOut, indexVar); }
+      else { wgslOut << "0u"; }
+      wgslOut << "], __newBits); atomicAdd(&result, 1u); }\n";
     } else if (asst->lhs_isIndexAccess()) {
       // Handle index access assignment: array[index] = expression
       wgslOut << indent;
@@ -1093,30 +1189,35 @@ void dsl_webgpu_generator::generateWGSLExpr(ASTNode* node, std::ofstream& wgslOu
   switch (node->getTypeofNode()) {
     case NODE_ID: { Identifier* id = static_cast<Identifier*>(node); wgslOut << (id ? id->getIdentifier() : "unnamed"); break; }
     case NODE_PROCCALLSTMT: {
-      // Handle procedure call statements in expression context (following CUDA backend pattern)
-      Expression* expr = static_cast<Expression*>(node);
-      proc_callExpr* proc = static_cast<proc_callExpr*>(expr);
+      // Safely treat statement as expression by accessing its expr payload
+      proc_callStmt* stmt = static_cast<proc_callStmt*>(node);
+      proc_callExpr* proc = stmt ? stmt->getProcCallExpr() : nullptr;
       if (proc && proc->getMethodId()) {
         std::string methodName = proc->getMethodId()->getIdentifier();
         if (methodName == "count_outNbrs") {
-          // Generate neighbor count: adj_offsets[v+1] - adj_offsets[v]
           list<argument*> argList = proc->getArgList();
           if (!argList.empty()) {
             argument* arg = argList.front();
             wgslOut << "(adj_offsets[";
-            if (arg->isExpr()) {
-              generateWGSLExpr(arg->getExpr(), wgslOut, indexVar);
-            }
+            if (arg->isExpr()) { generateWGSLExpr(arg->getExpr(), wgslOut, indexVar); }
             wgslOut << " + 1] - adj_offsets[";
-            if (arg->isExpr()) {
-              generateWGSLExpr(arg->getExpr(), wgslOut, indexVar);
-            }
+            if (arg->isExpr()) { generateWGSLExpr(arg->getExpr(), wgslOut, indexVar); }
             wgslOut << "])";
-          } else {
-            wgslOut << "0";
-          }
+          } else { wgslOut << "0"; }
+        } else if (methodName == "is_an_edge") {
+          // Map to helper
+          list<argument*> argList = proc->getArgList();
+          if (argList.size() >= 2) {
+            auto it = argList.begin();
+            argument* arg1 = *it; ++it; argument* arg2 = *it;
+            wgslOut << "findEdge(";
+            if (arg1->isExpr()) { generateWGSLExpr(arg1->getExpr(), wgslOut, indexVar); }
+            wgslOut << ", ";
+            if (arg2->isExpr()) { generateWGSLExpr(arg2->getExpr(), wgslOut, indexVar); }
+            wgslOut << ")";
+          } else { wgslOut << "true"; }
         } else {
-          wgslOut << "0"; // Other procedure calls
+          wgslOut << "0";
         }
       } else {
         wgslOut << "0";
@@ -1384,7 +1485,32 @@ void dsl_webgpu_generator::generateProcCall(proc_callStmt* stmt, std::ofstream& 
   
   // Handle attachNodeProperty calls - these become buffer initialization in JS
   if (methodName == "attachNodeProperty") {
-    out << "  // Property initialization: " << methodName << "\n";
+    out << "  // Property initialization: attachNodeProperty\n";
+    // For each assignment argument like prop = value, fill the corresponding GPU buffer
+    for (argument* a : procExpr->getArgList()) {
+      if (!a) continue;
+      if (a->isAssignExpr()) {
+        assignment* asg = a->getAssignExpr();
+        if (asg && asg->lhs_isIdentifier()) {
+          Identifier* id = asg->getId();
+          if (!id || !id->getIdentifier()) continue;
+          std::string propName = id->getIdentifier();
+          // Find WGSL type for JS ctor selection
+          std::string jsCtor = "Uint32Array";
+          for (const auto &p : propInfos) {
+            if (p.name == propName) {
+              jsCtor = (p.wgslType == "u32") ? "Uint32Array" : (p.wgslType == "i32") ? "Int32Array" : "Float32Array";
+              break;
+            }
+          }
+          out << "  { const N = nodeCount; const initArr = new " << jsCtor << "(N);\n";
+          out << "    for (let i = 0; i < N; i++) { initArr[i] = ";
+          if (asg->getExpr()) { generateExpr(asg->getExpr(), out); } else { out << "0"; }
+          out << "; }\n";
+          out << "    device.queue.writeBuffer(" << propName << "Buffer, 0, initArr); }\n";
+        }
+      }
+    }
   } else {
     out << "  // Unhandled proc call: " << methodName << "\n";
   }
@@ -1410,7 +1536,7 @@ void dsl_webgpu_generator::generatePropertyAccess(PropAccess* prop, std::ofstrea
     }
     if (!mapped) {
       // Fallback to monolithic buffer (to be removed in Phase 1)
-      wgslOut << "properties[" << objId->getIdentifier() << "]";
+    wgslOut << "properties[" << objId->getIdentifier() << "]";
     }
   }
 }

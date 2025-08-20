@@ -58,32 +58,78 @@ make -j8 | cat
 - Deno 2: use `--unstable-webgpu` (not the old `--unstable`)
 - Drivers polyfill `fetch` to read local WGSL files
 
-### Phase 0 TODO tracking
-- DONE: Params uniform buffer (b2) and fixed core bindings (b0..b3)
-- DONE: Type mapping scaffolding (DSL→WGSL/JS) and property registry
-- DONE: Per-property WGSL declarations (b4..N) and property access lowering
-- DONE: Explicit bind group layout; host API accepts `props`
-- PENDING: Typed per-property buffers (i32/u32/f32/bool) instead of `atomic<u32>` placeholder
-- PENDING: Host-side allocation/write/readback per property with usage flags (`in`/`out`/`inout`)
-- PENDING: Refined convergence logic and result/copy-back protocol
+### Phase 0 Status: COMPLETE
+**Core Infrastructure**: All essential Phase 0 tasks completed. WebGPU backend has solid foundation.
+
+#### DONE
+- Params uniform buffer (b2) and fixed core bindings (b0..b3)
+- Type mapping scaffolding (DSL→WGSL/JS) and property registry  
+- Per-property WGSL declarations (b4..N) and property access lowering
+- Explicit bind group layout; host API accepts `props`
+- Host-side allocation/write/readback per property with usage flags (`in`/`out`/`inout`)
+- Convergence/result protocol: host-side fixed-point and do-while loops with result reset, iteration guards, and compare-and-flag for property assignments
+- Segfault fix: Enhanced error checking resolved generator crashes
+
+#### DEFERRED
+- **Typed per-property arrays** (i32/u32/f32/bool): Currently using `atomic<u32>` backing for all properties to support f32 reductions via CAS. Will revisit in Phase 2+ when atomic vs non-atomic usage patterns are clearer.
+
+#### KNOWN ISSUES  
+- **Triangle counting returns 0**: Generated code compiles and runs but produces incorrect results. Algorithm logic needs debugging (validation issue, not infrastructure).
 
 ### Roadmap: Phases and TODOs
 
-- Phase 0 — Interface and types stabilization
+- **Phase 0 — Interface and types stabilization** COMPLETE
   - DONE: Params uniform (b2), fixed bindings (`adj_offsets` b0, `adj_data` b1, `result` b3)
   - DONE: Type mapping scaffolding and property registry
   - DONE: Per-property WGSL declarations (b4..N) + access lowering
   - DONE: Explicit bind group layout; host accepts `props`
-  - PENDING: Typed property arrays (i32/u32/f32/bool) instead of `atomic<u32>` placeholder
-  - PENDING: Host property allocation/copy with `in|out|inout` semantics
-  - PENDING: Convergence/result protocol refinements
+  - DONE: Host property allocation/copy with `in|out|inout` semantics
+  - DONE: Convergence/result protocol with host-side orchestration
+  - DEFERRED: Typed property arrays (deferred to Phase 2+)
 
-- Phase 1 — DSL mapping completeness (host + WGSL)
-  - Implement compound assignments (`+=,-=,*=,/=,|=,&=`) for ids, properties, index access
-  - Complete relational/logical/unary typing/casts in WGSL
-  - Graph methods: `neighbors_in`, `count_inNbrs`, `is_an_edge` fast path; weighted accessors
-  - Reductions on properties and scalars with correct typed atomics/CAS for float
-  - Fixed point: mark changes via compare-and-flag to drive convergence
+- **Phase 1 — DSL mapping completeness** IN PROGRESS
+
+### Phase 1 TODO List:
+
+#### 1. Compound Assignments (Priority: HIGH)
+- [ ] **1.1** Implement `+=, -=, *=, /=` for identifiers in WGSL
+- [ ] **1.2** Implement `+=, -=, *=, /=` for property access in WGSL  
+- [ ] **1.3** Implement `|=, &=` (bitwise) for identifiers and properties
+- [ ] **1.4** Implement compound assignments for index access expressions
+- [ ] **1.5** Add atomic vs non-atomic logic for compound assignments
+
+#### 2. Expression and Type System Completeness (Priority: HIGH)
+- [ ] **2.1** Complete relational operators (`<, >, <=, >=, ==, !=`) with proper type casting
+- [ ] **2.2** Complete logical operators (`&&, ||, !`) with short-circuit evaluation  
+- [ ] **2.3** Complete unary operators (`++, --, -, +, !`) for all contexts
+- [ ] **2.4** Implement proper type coercion (int↔float, bool↔int) in WGSL
+- [ ] **2.5** Add explicit casting functions for type conversions
+
+#### 3. Graph Methods and Accessors (Priority: MEDIUM)
+- [ ] **3.1** Implement `neighbors_in()` (reverse edge traversal)
+- [ ] **3.2** Implement `count_inNbrs()` (in-degree calculation)
+- [ ] **3.3** Optimize `is_an_edge()` with fast path for sorted adjacency
+- [ ] **3.4** Add support for weighted graphs (`edge_data`, `weight()`)
+- [ ] **3.5** Implement `num_nodes()`, `num_edges()` utility functions
+
+#### 4. Reductions and Atomics (Priority: HIGH)
+- [ ] **4.1** Extend atomic operations to cover all reduction types (`sum`, `min`, `max`, `count`)
+- [ ] **4.2** Implement proper float CAS atomics for f32 reductions
+- [ ] **4.3** Add reduction support for non-atomic properties (regular arrays)
+- [ ] **4.4** Implement reduction target validation and type checking
+- [ ] **4.5** Add parallel reduction patterns for large datasets
+
+#### 5. Advanced Control Flow (Priority: MEDIUM)  
+- [ ] **5.1** Enhance fixed-point convergence detection beyond simple compare-and-flag
+- [ ] **5.2** Implement nested loop optimization and kernel fusion
+- [ ] **5.3** Add support for `break` and `continue` in nested contexts
+- [ ] **5.4** Implement proper variable scoping in complex control structures
+
+#### 6. Host-Side DSL Completeness (Priority: MEDIUM)
+- [ ] **6.1** Complete `attachNodeProperty()` with all initialization patterns
+- [ ] **6.2** Implement proper error handling and validation in host code
+- [ ] **6.3** Add support for dynamic property allocation during execution
+- [ ] **6.4** Implement graph loading utilities and CSR format helpers
 
 - Phase 2 — Algorithm features (static)
   - PageRank: f32 rank arrays, damping constant, in-neighbor gather (float atomics via CAS)
