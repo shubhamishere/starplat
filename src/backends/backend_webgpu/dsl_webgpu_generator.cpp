@@ -118,11 +118,21 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   // Use a single generic result variable for all algorithms
   std::string resultVar = "result";
   
+  // Phase 3.18: Add modular utility imports
+  out << "// StarPlat WebGPU Generated Algorithm - Modular Implementation (Phase 3.18)\n";
+  out << "// Import utility functions for buffer management, pipeline caching, etc.\n";
+  out << "import { WebGPUBufferUtils } from '../webgpu_utils/host_utils/webgpu_buffer_utils.js';\n";
+  out << "import { WebGPUPipelineManager } from '../webgpu_utils/host_utils/webgpu_pipeline_manager.js';\n\n";
+  
   out << "export async function " << funcName << "(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount, props = {}, rev_adj_dataBuffer = null, rev_adj_offsetsBuffer = null) {\n";
   out << "  console.log('[WebGPU] Compute start: " << funcName << " with nodeCount=', nodeCount);\n";
+  out << "  \n";
+  out << "  // Phase 3.18: Use modular utilities for improved performance and maintainability\n";
+  out << "  const bufferUtils = new WebGPUBufferUtils(device);\n";
+  out << "  const pipelineManager = new WebGPUPipelineManager(device);\n";
   out << "  let " << resultVar << " = 0;\n";
-  // Allocate shared result and properties buffers once
-  out << "  const resultBuffer = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });\n";
+  // Allocate shared result and properties buffers using utilities (Phase 3.18 optimization)
+  out << "  const resultBuffer = bufferUtils.createEmptyStorageBuffer(4, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST);\n";
   if (!propInfos.empty()) { out << "  const propEntries = [];\n"; }
   if (!propInfos.empty()) {
     for (const auto &p : propInfos) {
@@ -156,13 +166,20 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
     }
   }
   out << "  console.log('[WebGPU] Compute end: returning result', " << resultVar << ");\n";
+  out << "  \n";
+  out << "  // Phase 3.18: Cleanup utility resources\n";
+  out << "  bufferUtils.cleanup();\n";
+  out << "  \n";
   out << "  return " << resultVar << ";\n";
   out << "}\n\n";
 
   // Generate the kernel launch functions  
+  // Phase 3.18 Note: These functions can be further optimized using pipelineManager
+  // for caching shaders, pipelines, and bind groups (Tasks 3.1, 3.2)
   for (int i = 0; i < kernelCounter; ++i) {
     out << "async function launchkernel_" << i << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount, rev_adj_dataBuffer = null, rev_adj_offsetsBuffer = null) {\n";
     out << "  console.log('[WebGPU] launchkernel_" << i << ": begin');\n";
+    out << "  // TODO Phase 3.18: Use pipelineManager.getShaderModule() for caching\n";
     out << "  const shaderCode = await (await fetch('kernel_" << i << ".wgsl')).text();\n";
     out << "  console.log('[WebGPU] launchkernel_" << i << ": WGSL fetched, size', shaderCode.length);\n";
     out << "  const shaderModule = device.createShaderModule({ code: shaderCode });\n";
@@ -685,160 +702,8 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
   wgslOut << "var<workgroup> scratchpad: array<u32, 256>;\n";
   wgslOut << "var<workgroup> scratchpad_f32: array<f32, 256>;\n\n";
   
-  // --- Helper Functions ---
-  // float atomics via CAS on atomic<u32>
-  wgslOut << "fn atomicAddF32(ptr: ptr<storage, atomic<u32>>, val: f32) -> f32 {\n";
-  wgslOut << "  loop {\n";
-  wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
-  wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
-  wgslOut << "    let newVal: f32 = oldVal + val;\n";
-  wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
-  wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
-  wgslOut << "    if (res.exchanged) { return oldVal; }\n";
-  wgslOut << "  }\n";
-  wgslOut << "}\n";
-  wgslOut << "fn atomicSubF32(ptr: ptr<storage, atomic<u32>>, val: f32) -> f32 {\n";
-  wgslOut << "  loop {\n";
-  wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
-  wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
-  wgslOut << "    let newVal: f32 = oldVal - val;\n";
-  wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
-  wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
-  wgslOut << "    if (res.exchanged) { return oldVal; }\n";
-  wgslOut << "  }\n";
-  wgslOut << "}\n";
-  wgslOut << "fn atomicMinF32(ptr: ptr<storage, atomic<u32>>, val: f32) {\n";
-  wgslOut << "  loop {\n";
-  wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
-  wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
-  wgslOut << "    let newVal: f32 = min(oldVal, val);\n";
-  wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
-  wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
-  wgslOut << "    if (res.exchanged) { return; }\n";
-  wgslOut << "  }\n";
-  wgslOut << "}\n";
-  wgslOut << "fn atomicMaxF32(ptr: ptr<storage, atomic<u32>>, val: f32) {\n";
-  wgslOut << "  loop {\n";
-  wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
-  wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
-  wgslOut << "    let newVal: f32 = max(oldVal, val);\n";
-  wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
-  wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
-  wgslOut << "    if (res.exchanged) { return; }\n";
-  wgslOut << "  }\n";
-  wgslOut << "}\n\n";
-  wgslOut << "/**\n";
-  wgslOut << " * Checks if there's an edge between vertices u and w\n";
-  wgslOut << " * Uses binary search for sorted adjacency lists (O(log n))\n";
-  wgslOut << " * Falls back to linear search for unsorted lists\n";
-  wgslOut << " */\n";
-  wgslOut << "fn findEdge(u: u32, w: u32) -> bool {\n";
-  wgslOut << "  let start = adj_offsets[u];\n";
-  wgslOut << "  let end = adj_offsets[u + 1u];\n";
-  wgslOut << "  let degree = end - start;\n";
-  wgslOut << "  \n";
-  wgslOut << "  // For small degree (< 8), use linear search\n";
-  wgslOut << "  if (degree < 8u) {\n";
-  wgslOut << "    for (var e = start; e < end; e = e + 1u) {\n";
-  wgslOut << "      if (adj_data[e] == w) { return true; }\n";
-  wgslOut << "    }\n";
-  wgslOut << "    return false;\n";
-  wgslOut << "  }\n";
-  wgslOut << "  \n";
-  wgslOut << "  // Binary search for larger degrees (assumes sorted adjacency)\n";
-  wgslOut << "  var left = start;\n";
-  wgslOut << "  var right = end;\n";
-  wgslOut << "  while (left < right) {\n";
-  wgslOut << "    let mid = left + (right - left) / 2u;\n";
-  wgslOut << "    let mid_val = adj_data[mid];\n";
-  wgslOut << "    if (mid_val == w) {\n";
-  wgslOut << "      return true;\n";
-  wgslOut << "    } else if (mid_val < w) {\n";
-  wgslOut << "      left = mid + 1u;\n";
-  wgslOut << "    } else {\n";
-  wgslOut << "      right = mid;\n";
-  wgslOut << "    }\n";
-  wgslOut << "  }\n";
-  wgslOut << "  return false;\n";
-  wgslOut << "}\n\n";
-  
-  wgslOut << "/**\n";
-  wgslOut << " * Returns the edge index for edge from u to w\n";
-  wgslOut << " * Returns 0xFFFFFFFFu if edge not found\n";
-  wgslOut << " */\n";
-  wgslOut << "fn getEdgeIndex(u: u32, w: u32) -> u32 {\n";
-  wgslOut << "  let start = adj_offsets[u];\n";
-  wgslOut << "  let end = adj_offsets[u + 1u];\n";
-  wgslOut << "  for (var e = start; e < end; e = e + 1u) {\n";
-  wgslOut << "    if (adj_data[e] == w) { return e; }\n";
-  wgslOut << "  }\n";
-  wgslOut << "  return 0xFFFFFFFFu; // Edge not found\n";
-  wgslOut << "}\n\n";
-  
-  // --- Workgroup Parallel Reduction Functions ---
-  wgslOut << "fn workgroupReduceSum(local_id: u32, value: u32) -> u32 {\n";
-  wgslOut << "  scratchpad[local_id] = value;\n";
-  wgslOut << "  workgroupBarrier();\n";
-  wgslOut << "  \n";
-  wgslOut << "  var stride = 128u;\n";
-  wgslOut << "  while (stride > 0u) {\n";
-  wgslOut << "    if (local_id < stride) {\n";
-  wgslOut << "      scratchpad[local_id] += scratchpad[local_id + stride];\n";
-  wgslOut << "    }\n";
-  wgslOut << "    workgroupBarrier();\n";
-  wgslOut << "    stride = stride >> 1u;\n";
-  wgslOut << "  }\n";
-  wgslOut << "  \n";
-  wgslOut << "  return scratchpad[0];\n";
-  wgslOut << "}\n\n";
-  
-  wgslOut << "fn workgroupReduceSumF32(local_id: u32, value: f32) -> f32 {\n";
-  wgslOut << "  scratchpad_f32[local_id] = value;\n";
-  wgslOut << "  workgroupBarrier();\n";
-  wgslOut << "  \n";
-  wgslOut << "  var stride = 128u;\n";
-  wgslOut << "  while (stride > 0u) {\n";
-  wgslOut << "    if (local_id < stride) {\n";
-  wgslOut << "      scratchpad_f32[local_id] += scratchpad_f32[local_id + stride];\n";
-  wgslOut << "    }\n";
-  wgslOut << "    workgroupBarrier();\n";
-  wgslOut << "    stride = stride >> 1u;\n";
-  wgslOut << "  }\n";
-  wgslOut << "  \n";
-  wgslOut << "  return scratchpad_f32[0];\n";
-  wgslOut << "}\n\n";
-  
-  wgslOut << "fn workgroupReduceMin(local_id: u32, value: u32) -> u32 {\n";
-  wgslOut << "  scratchpad[local_id] = value;\n";
-  wgslOut << "  workgroupBarrier();\n";
-  wgslOut << "  \n";
-  wgslOut << "  var stride = 128u;\n";
-  wgslOut << "  while (stride > 0u) {\n";
-  wgslOut << "    if (local_id < stride) {\n";
-  wgslOut << "      scratchpad[local_id] = min(scratchpad[local_id], scratchpad[local_id + stride]);\n";
-  wgslOut << "    }\n";
-  wgslOut << "    workgroupBarrier();\n";
-  wgslOut << "    stride = stride >> 1u;\n";
-  wgslOut << "  }\n";
-  wgslOut << "  \n";
-  wgslOut << "  return scratchpad[0];\n";
-  wgslOut << "}\n\n";
-  
-  wgslOut << "fn workgroupReduceMax(local_id: u32, value: u32) -> u32 {\n";
-  wgslOut << "  scratchpad[local_id] = value;\n";
-  wgslOut << "  workgroupBarrier();\n";
-  wgslOut << "  \n";
-  wgslOut << "  var stride = 128u;\n";
-  wgslOut << "  while (stride > 0u) {\n";
-  wgslOut << "    if (local_id < stride) {\n";
-  wgslOut << "      scratchpad[local_id] = max(scratchpad[local_id], scratchpad[local_id + stride]);\n";
-  wgslOut << "    }\n";
-  wgslOut << "    workgroupBarrier();\n";
-  wgslOut << "    stride = stride >> 1u;\n";
-  wgslOut << "  }\n";
-  wgslOut << "  \n";
-  wgslOut << "  return scratchpad[0];\n";
-  wgslOut << "}\n\n";
+  // Phase 3.18: Replace inlined utilities with modular includes
+  includeWGSLUtilities(wgslOut);
   
   // --- Main Entry Point ---
   wgslOut << "@compute @workgroup_size(256)\n";
@@ -1668,12 +1533,39 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
       wgslOut << indent << "}\n";
       break;
     }
-    case NODE_RETURN: {
+        case NODE_RETURN: {
       // Handle return statements
       wgslOut << indent << "return;\n";
       break;
     }
-
+    case NODE_BREAKSTMT: {
+      // Phase 3.7: Enhanced break statement support with control flow utilities
+      wgslOut << indent << "break;\n";
+      break;
+    }
+    case NODE_CONTINUESTMT: {
+      // Phase 3.7: Enhanced continue statement support with control flow utilities
+      wgslOut << indent << "continue;\n";
+      break;
+    }
+    case NODE_WHILESTMT: {
+      // Phase 3.7: While loop support with nested control flow
+      whileStmt* w = static_cast<whileStmt*>(node);
+      wgslOut << indent << "while (";
+      if (w->getCondition()) generateWGSLExpr(w->getCondition(), wgslOut, indexVar);
+      else wgslOut << "false";
+      wgslOut << ") {\n";
+      if (w->getBody()) {
+        if (w->getBody()->getTypeofNode() == NODE_BLOCKSTMT) {
+          generateWGSLStatement(w->getBody(), wgslOut, indexVar, indentLevel + 1);
+        } else {
+          generateWGSLStatement(w->getBody(), wgslOut, indexVar, indentLevel + 1);
+        }
+      }
+      wgslOut << indent << "}\n";
+      break;
+    }
+    
     case NODE_IFSTMT: {
       ifStmt* s = static_cast<ifStmt*>(node);
       wgslOut << indent << "if ("; 
@@ -2514,6 +2406,133 @@ void dsl_webgpu_generator::generateWithCast(Expression* expr, const std::string&
     // No casting needed
     generateWGSLExpr(expr, wgslOut, indexVar);
   }
+}
+
+// Phase 3.18: Utility file inclusion helpers
+std::string dsl_webgpu_generator::readUtilityFile(const std::string& relativePath) {
+  std::string basePath = "../graphcode/webgpu_utils/";
+  std::string fullPath = basePath + relativePath;
+  
+  std::ifstream file(fullPath);
+  if (!file.is_open()) {
+    std::cerr << "[WebGPU] Warning: Could not open utility file: " << fullPath << std::endl;
+    return ""; // Return empty string if file cannot be read
+  }
+  
+  std::string content;
+  std::string line;
+  while (std::getline(file, line)) {
+    content += line + "\n";
+  }
+  file.close();
+  
+  return content;
+}
+
+void dsl_webgpu_generator::includeWGSLUtilities(std::ofstream& wgslOut) {
+  wgslOut << "// ============================================================================\n";
+  wgslOut << "// StarPlat WebGPU Utilities - Modular Implementation (Phase 3.14-3.16)\n";
+  wgslOut << "// ============================================================================\n\n";
+  
+  // Include atomic operations utilities
+  std::string atomicsContent = readUtilityFile("wgsl_kernels/webgpu_atomics.wgsl");
+  if (!atomicsContent.empty()) {
+    wgslOut << "// Atomic Operations Utilities (Task 3.14)\n";
+    wgslOut << atomicsContent << "\n";
+  } else {
+    // Fallback: include minimal atomic functions inline for backward compatibility
+    wgslOut << "// Fallback atomic operations (utility file not found)\n";
+    wgslOut << "fn atomicAddF32(ptr: ptr<storage, atomic<u32>>, val: f32) -> f32 {\n";
+    wgslOut << "  loop {\n";
+    wgslOut << "    let oldBits: u32 = atomicLoad(ptr);\n";
+    wgslOut << "    let oldVal: f32 = bitcast<f32>(oldBits);\n";
+    wgslOut << "    let newVal: f32 = oldVal + val;\n";
+    wgslOut << "    let newBits: u32 = bitcast<u32>(newVal);\n";
+    wgslOut << "    let res = atomicCompareExchangeWeak(ptr, oldBits, newBits);\n";
+    wgslOut << "    if (res.exchanged) { return oldVal; }\n";
+    wgslOut << "  }\n";
+    wgslOut << "}\n\n";
+  }
+  
+  // Include graph methods utilities
+  std::string graphContent = readUtilityFile("wgsl_kernels/webgpu_graph_methods.wgsl");
+  if (!graphContent.empty()) {
+    wgslOut << "// Graph Methods Utilities (Task 3.15)\n";
+    wgslOut << graphContent << "\n";
+  } else {
+    // Fallback: include minimal graph functions inline
+    wgslOut << "// Fallback graph methods (utility file not found)\n";
+    wgslOut << "fn findEdge(u: u32, w: u32) -> bool {\n";
+    wgslOut << "  let start = adj_offsets[u];\n";
+    wgslOut << "  let end = adj_offsets[u + 1u];\n";
+    wgslOut << "  for (var e = start; e < end; e = e + 1u) {\n";
+    wgslOut << "    if (adj_data[e] == w) { return true; }\n";
+    wgslOut << "  }\n";
+    wgslOut << "  return false;\n";
+    wgslOut << "}\n\n";
+  }
+  
+  // Include workgroup reductions utilities  
+  std::string reductionsContent = readUtilityFile("wgsl_kernels/webgpu_reductions.wgsl");
+  if (!reductionsContent.empty()) {
+    wgslOut << "// Workgroup Reductions Utilities (Task 3.16)\n";
+    wgslOut << reductionsContent << "\n";
+  } else {
+    // Fallback: include minimal reduction functions inline
+    wgslOut << "// Fallback workgroup reductions (utility file not found)\n";
+    wgslOut << "fn workgroupReduceSum(local_id: u32, value: u32) -> u32 {\n";
+    wgslOut << "  scratchpad[local_id] = value;\n";
+    wgslOut << "  workgroupBarrier();\n";
+    wgslOut << "  var stride = 128u;\n";
+    wgslOut << "  while (stride > 0u) {\n";
+    wgslOut << "    if (local_id < stride) {\n";
+    wgslOut << "      scratchpad[local_id] += scratchpad[local_id + stride];\n";
+    wgslOut << "    }\n";
+    wgslOut << "    workgroupBarrier();\n";
+    wgslOut << "    stride = stride >> 1u;\n";
+    wgslOut << "  }\n";
+    wgslOut << "  return scratchpad[0];\n";
+    wgslOut << "}\n\n";
+  }
+  
+  // Phase 3.7: Include control flow utilities for break/continue support
+  std::string controlFlowContent = readUtilityFile("wgsl_kernels/webgpu_control_flow.wgsl");
+  if (!controlFlowContent.empty()) {
+    wgslOut << "// Control Flow and Nested Context Utilities (Task 3.7)\n";
+    wgslOut << controlFlowContent << "\n";
+  }
+  
+  // Phase 3.5: Include convergence detection utilities
+  std::string convergenceContent = readUtilityFile("wgsl_kernels/webgpu_convergence.wgsl");
+  if (!convergenceContent.empty()) {
+    wgslOut << "// Enhanced Convergence Detection Utilities (Task 3.5)\n";
+    wgslOut << convergenceContent << "\n";
+  }
+  
+  // Phase 3.10: Include error handling utilities
+  std::string errorContent = readUtilityFile("wgsl_kernels/webgpu_error_handling.wgsl");
+  if (!errorContent.empty()) {
+    wgslOut << "// Error Handling and Validation Utilities (Task 3.10)\n";
+    wgslOut << errorContent << "\n";
+  }
+  
+  // Phase 3.9/3.11: Include dynamic property management utilities
+  std::string dynamicPropsContent = readUtilityFile("wgsl_kernels/webgpu_dynamic_properties.wgsl");
+  if (!dynamicPropsContent.empty()) {
+    wgslOut << "// Dynamic Property Management Utilities (Tasks 3.9, 3.11)\n";
+    wgslOut << dynamicPropsContent << "\n";
+  }
+  
+  // Phase 3.6: Include loop optimization utilities
+  std::string loopOptContent = readUtilityFile("wgsl_kernels/webgpu_loop_optimization.wgsl");
+  if (!loopOptContent.empty()) {
+    wgslOut << "// Loop Optimization and Kernel Fusion Utilities (Task 3.6)\n";
+    wgslOut << loopOptContent << "\n";
+  }
+  
+  wgslOut << "// ============================================================================\n";
+  wgslOut << "// End of Utility Includes\n";  
+  wgslOut << "// ============================================================================\n\n";
 }
 
 } // namespace spwebgpu

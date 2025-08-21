@@ -50,6 +50,10 @@ private:
 
   std::vector<PropInfo> propInfos;
   void buildPropertyRegistry(Function* func);
+  
+  // Phase 3.18: Utility file inclusion helpers
+  std::string readUtilityFile(const std::string& relativePath);
+  void includeWGSLUtilities(std::ofstream& wgslOut);
   std::string mapTypeToWGSL(Type* type);
   bool isNumericIntegerType(Type* type);
   
