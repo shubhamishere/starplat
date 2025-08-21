@@ -133,6 +133,62 @@ const buffers = bufferUtils.createOptimizedBuffers(graphData);
 const pipeline = await pipelineManager.getOrCreatePipeline(shaderModule);
 ```
 
+## CSR Loaders and Graph Loading
+
+The WebGPU backend includes comprehensive graph loading utilities in `graphcode/generated_webgpu/` that work seamlessly with the utility library.
+
+### Core Components
+
+- **GraphLoader**: Load graphs from files and convert to CSR format
+- **GraphCSR**: CSR representation with GPU buffer creation
+- **WebGPUDriver**: Generic driver template for running algorithms
+- **Algorithm Drivers**: Ready-to-use drivers for Triangle Counting, PageRank, SSSP
+
+### Quick Usage
+
+```javascript
+import { GraphLoader } from "../generated_webgpu/graphloader.js";
+import { runAlgorithm } from "../generated_webgpu/webgpu_driver_template.js";
+
+// Load graph and run algorithm
+const result = await runAlgorithm('Compute_TC', 'graph.txt', {
+  directed: false,
+  verbose: true
+});
+```
+
+### Command Line Usage
+
+```bash
+# Run triangle counting
+deno run --allow-read --unstable-webgpu driver_triangle_count_v2.js graph.txt
+
+# Run validation tests
+deno run --allow-read --unstable-webgpu driver_triangle_count_v2.js --test
+```
+
+### Graph Loading Features
+
+**Supported Formats:**
+- Edge list format (`src dst` or `src dst weight`)
+- Automatic directed/undirected handling
+- Weighted/unweighted graph detection
+- Comment lines starting with `#`
+
+**CSR Generation:**
+- Forward and reverse CSR for bidirectional access
+- GPU buffer creation for WebGPU algorithms
+- Structure validation and statistics
+- Test graph generation utilities
+
+### Integration with Utilities
+
+The CSR loaders leverage the webgpu_utils infrastructure:
+- **Device Management**: Automatic WebGPU device initialization
+- **Buffer Utilities**: Optimized buffer creation and management
+- **Error Handling**: Comprehensive validation and debugging
+- **Testing Framework**: Built-in validation with known test cases
+
 ## Performance Impact
 
 ### Compilation Performance
