@@ -1,15 +1,17 @@
-export async function TestWorkingVsBroken(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount, props = {}, rev_adj_dataBuffer = null, rev_adj_offsetsBuffer = null) {
-  console.log('[WebGPU] Compute start: TestWorkingVsBroken with nodeCount=', nodeCount);
+export async function Compute_TC(device, adj_dataBuffer, adj_offsetsBuffer, nodeCount, props = {}, rev_adj_dataBuffer = null, rev_adj_offsetsBuffer = null) {
+  console.log('[WebGPU] Compute start: Compute_TC with nodeCount=', nodeCount);
   let result = 0;
   const resultBuffer = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
   const propertyBuffer = device.createBuffer({ size: Math.max(1, nodeCount) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));
   const paramsBuffer = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(paramsBuffer, 0, new Uint32Array([nodeCount, 0, 0, 0]));
+  let triangle_count = 0;
   // Reset result before dispatch
   device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));
   const kernel_res_0 = await launchkernel_0(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, propertyBuffer, nodeCount, rev_adj_dataBuffer, rev_adj_offsetsBuffer);
   result = kernel_res_0;
+  // [WebGPU] ignoring DSL return in host orchestration
   console.log('[WebGPU] Compute end: returning result', result);
   return result;
 }

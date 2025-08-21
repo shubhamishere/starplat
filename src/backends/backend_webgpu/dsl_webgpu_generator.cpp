@@ -678,8 +678,12 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
     }
     wgslOut << "\n";
   } else {
-    wgslOut << "@group(0) @binding(4) var<storage, read_write> properties: array<atomic<u32>>;\n\n";
+    wgslOut << "@group(0) @binding(6) var<storage, read_write> properties: array<atomic<u32>>;\n\n";
   }
+  
+  // --- Workgroup Shared Memory for Parallel Reductions ---
+  wgslOut << "var<workgroup> scratchpad: array<u32, 256>;\n";
+  wgslOut << "var<workgroup> scratchpad_f32: array<f32, 256>;\n\n";
   
   // --- Helper Functions ---
   // float atomics via CAS on atomic<u32>
@@ -771,9 +775,74 @@ void dsl_webgpu_generator::emitWGSLKernel(const std::string& baseName, ASTNode* 
   wgslOut << "  return 0xFFFFFFFFu; // Edge not found\n";
   wgslOut << "}\n\n";
   
+  // --- Workgroup Parallel Reduction Functions ---
+  wgslOut << "fn workgroupReduceSum(local_id: u32, value: u32) -> u32 {\n";
+  wgslOut << "  scratchpad[local_id] = value;\n";
+  wgslOut << "  workgroupBarrier();\n";
+  wgslOut << "  \n";
+  wgslOut << "  var stride = 128u;\n";
+  wgslOut << "  while (stride > 0u) {\n";
+  wgslOut << "    if (local_id < stride) {\n";
+  wgslOut << "      scratchpad[local_id] += scratchpad[local_id + stride];\n";
+  wgslOut << "    }\n";
+  wgslOut << "    workgroupBarrier();\n";
+  wgslOut << "    stride = stride >> 1u;\n";
+  wgslOut << "  }\n";
+  wgslOut << "  \n";
+  wgslOut << "  return scratchpad[0];\n";
+  wgslOut << "}\n\n";
+  
+  wgslOut << "fn workgroupReduceSumF32(local_id: u32, value: f32) -> f32 {\n";
+  wgslOut << "  scratchpad_f32[local_id] = value;\n";
+  wgslOut << "  workgroupBarrier();\n";
+  wgslOut << "  \n";
+  wgslOut << "  var stride = 128u;\n";
+  wgslOut << "  while (stride > 0u) {\n";
+  wgslOut << "    if (local_id < stride) {\n";
+  wgslOut << "      scratchpad_f32[local_id] += scratchpad_f32[local_id + stride];\n";
+  wgslOut << "    }\n";
+  wgslOut << "    workgroupBarrier();\n";
+  wgslOut << "    stride = stride >> 1u;\n";
+  wgslOut << "  }\n";
+  wgslOut << "  \n";
+  wgslOut << "  return scratchpad_f32[0];\n";
+  wgslOut << "}\n\n";
+  
+  wgslOut << "fn workgroupReduceMin(local_id: u32, value: u32) -> u32 {\n";
+  wgslOut << "  scratchpad[local_id] = value;\n";
+  wgslOut << "  workgroupBarrier();\n";
+  wgslOut << "  \n";
+  wgslOut << "  var stride = 128u;\n";
+  wgslOut << "  while (stride > 0u) {\n";
+  wgslOut << "    if (local_id < stride) {\n";
+  wgslOut << "      scratchpad[local_id] = min(scratchpad[local_id], scratchpad[local_id + stride]);\n";
+  wgslOut << "    }\n";
+  wgslOut << "    workgroupBarrier();\n";
+  wgslOut << "    stride = stride >> 1u;\n";
+  wgslOut << "  }\n";
+  wgslOut << "  \n";
+  wgslOut << "  return scratchpad[0];\n";
+  wgslOut << "}\n\n";
+  
+  wgslOut << "fn workgroupReduceMax(local_id: u32, value: u32) -> u32 {\n";
+  wgslOut << "  scratchpad[local_id] = value;\n";
+  wgslOut << "  workgroupBarrier();\n";
+  wgslOut << "  \n";
+  wgslOut << "  var stride = 128u;\n";
+  wgslOut << "  while (stride > 0u) {\n";
+  wgslOut << "    if (local_id < stride) {\n";
+  wgslOut << "      scratchpad[local_id] = max(scratchpad[local_id], scratchpad[local_id + stride]);\n";
+  wgslOut << "    }\n";
+  wgslOut << "    workgroupBarrier();\n";
+  wgslOut << "    stride = stride >> 1u;\n";
+  wgslOut << "  }\n";
+  wgslOut << "  \n";
+  wgslOut << "  return scratchpad[0];\n";
+  wgslOut << "}\n\n";
+  
   // --- Main Entry Point ---
   wgslOut << "@compute @workgroup_size(256)\n";
-  wgslOut << "fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {\n";
+  wgslOut << "fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>) {\n";
   wgslOut << "  let v = global_id.x;\n";
   wgslOut << "  let node_count = params.node_count;\n";
   wgslOut << "  \n";
@@ -839,7 +908,64 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
     }
     bool rhsIsFloat = (rhsExpr && isFloatExpr(rhsExpr));
 
-    auto emitOp = [&](const std::string &ptr) {
+    // Helper to check if target is a local variable (not a property)
+    auto isLocalVariable = [&](Identifier* id) -> bool {
+      if (!id) return false;
+      std::string name = id->getIdentifier();
+      // Check if it's a known property
+      for (const auto& prop : propInfos) {
+        if (prop.name == name) return false;
+      }
+      // Check if it matches common local variable patterns or is not a global property
+      return (name.find("_count") != std::string::npos || 
+              name.find("_sum") != std::string::npos ||
+              name.find("local_") != std::string::npos ||
+              name == "count" || name == "sum" || name == "temp");
+    };
+
+    // Validation lambda for reduction targets
+    auto validateReductionTarget = [&](reductionCallStmt* r) -> bool {
+      if (!r) return false;
+      
+      if (r->isLeftIdentifier()) {
+        Identifier* leftId = r->getLeftId();
+        if (!leftId || !leftId->getIdentifier()) {
+          std::cerr << "[WebGPU] Warning: Reduction target identifier is null" << std::endl;
+          return false;
+        }
+        return true;
+      } else if (r->getLhsType() == 2) {
+        PropAccess* prop = r->getPropAccess();
+        if (!prop || !prop->getIdentifier2()) {
+          std::cerr << "[WebGPU] Warning: Reduction target property is invalid" << std::endl;
+          return false;
+        }
+        return true;
+      }
+      
+      std::cerr << "[WebGPU] Warning: Unknown reduction target type" << std::endl;
+      return false;
+    };
+
+    // Validation lambda for operator types
+    auto validateOperatorType = [&](int opKind, Expression* rhsExpr) -> bool {
+      if (opKind < 0 || opKind > 2) {
+        std::cerr << "[WebGPU] Warning: Invalid reduction operator kind: " << opKind << std::endl;
+        return false;
+      }
+      
+      // Check for division by zero in RHS expressions
+      if (rhsExpr && rhsExpr->getExpressionFamily() == EXPR_INTCONSTANT) {
+        if (rhsExpr->getIntegerConstant() == 0 && (opKind == 0 || opKind == 1 || opKind == 2)) {
+          std::cerr << "[WebGPU] Warning: Potential division by zero in reduction" << std::endl;
+          return false;
+        }
+      }
+      
+      return true;
+    };
+
+    auto emitAtomicOp = [&](const std::string &ptr) {
       if (!rhsIsFloat) {
         if (opKind == 1) {
           wgslOut << "atomicMin(" << ptr << ", ";
@@ -858,36 +984,88 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
         }
       }
     };
-
-    // Decide target pointer
-    if (r->isLeftIdentifier()) {
-      // Use global result for scalar reductions
-      wgslOut << indent;
-      emitOp("&result");
-      if (r->is_reducCall()) {
-        // reductionCall has arg list; take first expr as rhs
-        reductionCall* rc = r->getReducCall();
-        auto args = rc->getargList();
-        if (!args.empty()) {
-          argument* a = args.front();
-          if (a && a->isExpr()) {
-            if (rhsIsFloat) { wgslOut << "f32("; generateWGSLExpr(a->getExpr(), wgslOut, indexVar); wgslOut << ")"; }
-            else { wgslOut << "u32("; generateWGSLExpr(a->getExpr(), wgslOut, indexVar); wgslOut << ")"; }
-          }
-        }
-      } else if (r->getRightSide()) {
-        if (rhsIsFloat) { wgslOut << "f32("; generateWGSLExpr(r->getRightSide(), wgslOut, indexVar); wgslOut << ")"; }
-        else { wgslOut << "u32("; generateWGSLExpr(r->getRightSide(), wgslOut, indexVar); wgslOut << ")"; }
+    
+    auto emitNonAtomicOp = [&](const std::string &var, Expression* rhs) {
+      wgslOut << indent << var;
+      if (opKind == 1) {
+        wgslOut << " = min(" << var << ", ";
+      } else if (opKind == 2) {
+        wgslOut << " = max(" << var << ", ";
+      } else {
+        wgslOut << " += ";
+      }
+      if (rhs) {
+        if (rhsIsFloat) { wgslOut << "f32("; generateWGSLExpr(rhs, wgslOut, indexVar); wgslOut << ")"; }
+        else { wgslOut << "u32("; generateWGSLExpr(rhs, wgslOut, indexVar); wgslOut << ")"; }
       } else {
         wgslOut << (rhsIsFloat ? "1.0" : "1u");
       }
-      wgslOut << ");\n";
+      if (opKind == 1 || opKind == 2) wgslOut << ")";
+      wgslOut << ";\n";
+    };
+
+    // Apply validation
+    if (!validateReductionTarget(r)) {
+      wgslOut << indent << "// Invalid reduction target - skipping\n";
+      return;
+    }
+    
+    if (!validateOperatorType(opKind, rhsExpr)) {
+      wgslOut << indent << "// Invalid operator type - skipping\n";
+      return;
+    }
+
+    // Decide target pointer
+    if (r->isLeftIdentifier()) {
+      Identifier* leftId = r->getLeftId();
+      if (isLocalVariable(leftId)) {
+        // Local variable - use non-atomic operations
+        Expression* rhs = nullptr;
+        if (r->is_reducCall()) {
+          reductionCall* rc = r->getReducCall();
+          auto args = rc->getargList();
+          if (!args.empty()) {
+            argument* a = args.front();
+            if (a && a->isExpr()) rhs = a->getExpr();
+          }
+        } else if (r->getRightSide()) {
+          rhs = r->getRightSide();
+        }
+        emitNonAtomicOp(leftId ? leftId->getIdentifier() : "result", rhs);
+      } else {
+        // Global property or result - use atomic operations
+        wgslOut << indent;
+        emitAtomicOp("&result");
+        if (r->is_reducCall()) {
+          // reductionCall has arg list; take first expr as rhs
+          reductionCall* rc = r->getReducCall();
+          auto args = rc->getargList();
+          if (!args.empty()) {
+            argument* a = args.front();
+            if (a && a->isExpr()) {
+              if (rhsIsFloat) { wgslOut << "f32("; generateWGSLExpr(a->getExpr(), wgslOut, indexVar); wgslOut << ")"; }
+              else { wgslOut << "u32("; generateWGSLExpr(a->getExpr(), wgslOut, indexVar); wgslOut << ")"; }
+            }
+          }
+        } else if (r->getRightSide()) {
+          if (rhsIsFloat) { wgslOut << "f32("; generateWGSLExpr(r->getRightSide(), wgslOut, indexVar); wgslOut << ")"; }
+          else { wgslOut << "u32("; generateWGSLExpr(r->getRightSide(), wgslOut, indexVar); wgslOut << ")"; }
+        } else {
+          wgslOut << (rhsIsFloat ? "1.0" : "1u");
+        }
+        wgslOut << ");\n";
+      }
     } else if (r->getLhsType() == 2) {
-      // Property target
-      wgslOut << indent;
+      // Property target - validate property access
       PropAccess* prop = r->getPropAccess();
+      if (!prop || (!prop->getIdentifier1() && !prop->getPropExpr())) {
+        wgslOut << indent << "// Invalid property access in reduction - skipping\n";
+        return;
+      }
+      
+      wgslOut << indent;
       std::string arr = prop && prop->getIdentifier2() ? prop->getIdentifier2()->getIdentifier() : "properties";
-      // Emit operator and pointer inline
+      // Emit operator and pointer inline (properties are always atomic)
       if (!rhsIsFloat) {
         if (opKind == 1) { wgslOut << "atomicMin(&" << arr << "["; }
         else if (opKind == 2) { wgslOut << "atomicMax(&" << arr << "["; }
@@ -921,9 +1099,9 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
       }
       wgslOut << ");\n";
     } else {
-      // Fallback to result
+      // Fallback to result (always atomic)
       wgslOut << indent;
-      emitOp("&result");
+      emitAtomicOp("&result");
       if (r->getRightSide()) {
         if (rhsIsFloat) { wgslOut << "f32("; generateWGSLExpr(r->getRightSide(), wgslOut, indexVar); wgslOut << ")"; }
         else { wgslOut << "u32("; generateWGSLExpr(r->getRightSide(), wgslOut, indexVar); wgslOut << ")"; }
@@ -1612,7 +1790,15 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
         declaration* decl = static_cast<declaration*>(node);
         if (decl && decl->getdeclId()) {
           Identifier* id = decl->getdeclId();
-          wgslOut << indent << "let " << (id ? id->getIdentifier() : "var") << " = ";
+          std::string varName = id ? id->getIdentifier() : "var";
+          
+          // Use 'var' for variables that might be modified (local variables)
+          bool isMutableLocal = (varName.find("_count") != std::string::npos || 
+                                varName.find("_sum") != std::string::npos ||
+                                varName.find("local_") != std::string::npos ||
+                                varName == "count" || varName == "sum" || varName == "temp");
+          
+          wgslOut << indent << (isMutableLocal ? "var " : "let ") << varName << " = ";
           if (decl->getExpressionAssigned()) {
             generateWGSLExpr(decl->getExpressionAssigned(), wgslOut, indexVar);
           } else {

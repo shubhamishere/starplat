@@ -6,7 +6,10 @@
 struct Params { node_count: u32; _pad0: u32; _pad1: u32; _pad2: u32; };
 @group(0) @binding(4) var<uniform> params: Params;
 @group(0) @binding(5) var<storage, read_write> result: atomic<u32>;
-@group(0) @binding(4) var<storage, read_write> properties: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read_write> properties: array<atomic<u32>>;
+
+var<workgroup> scratchpad: array<u32, 256>;
+var<workgroup> scratchpad_f32: array<f32, 256>;
 
 fn atomicAddF32(ptr: ptr<storage, atomic<u32>>, val: f32) -> f32 {
   loop {
@@ -97,8 +100,72 @@ fn getEdgeIndex(u: u32, w: u32) -> u32 {
   return 0xFFFFFFFFu; // Edge not found
 }
 
+fn workgroupReduceSum(local_id: u32, value: u32) -> u32 {
+  scratchpad[local_id] = value;
+  workgroupBarrier();
+  
+  var stride = 128u;
+  while (stride > 0u) {
+    if (local_id < stride) {
+      scratchpad[local_id] += scratchpad[local_id + stride];
+    }
+    workgroupBarrier();
+    stride = stride >> 1u;
+  }
+  
+  return scratchpad[0];
+}
+
+fn workgroupReduceSumF32(local_id: u32, value: f32) -> f32 {
+  scratchpad_f32[local_id] = value;
+  workgroupBarrier();
+  
+  var stride = 128u;
+  while (stride > 0u) {
+    if (local_id < stride) {
+      scratchpad_f32[local_id] += scratchpad_f32[local_id + stride];
+    }
+    workgroupBarrier();
+    stride = stride >> 1u;
+  }
+  
+  return scratchpad_f32[0];
+}
+
+fn workgroupReduceMin(local_id: u32, value: u32) -> u32 {
+  scratchpad[local_id] = value;
+  workgroupBarrier();
+  
+  var stride = 128u;
+  while (stride > 0u) {
+    if (local_id < stride) {
+      scratchpad[local_id] = min(scratchpad[local_id], scratchpad[local_id + stride]);
+    }
+    workgroupBarrier();
+    stride = stride >> 1u;
+  }
+  
+  return scratchpad[0];
+}
+
+fn workgroupReduceMax(local_id: u32, value: u32) -> u32 {
+  scratchpad[local_id] = value;
+  workgroupBarrier();
+  
+  var stride = 128u;
+  while (stride > 0u) {
+    if (local_id < stride) {
+      scratchpad[local_id] = max(scratchpad[local_id], scratchpad[local_id + stride]);
+    }
+    workgroupBarrier();
+    stride = stride >> 1u;
+  }
+  
+  return scratchpad[0];
+}
+
 @compute @workgroup_size(256)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>) {
   let v = global_id.x;
   let node_count = params.node_count;
   
@@ -106,8 +173,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     return;
   }
 
-  var in_degree = (rev_adj_offsets[v + 1] - rev_adj_offsets[v]);
-  var out_degree = (adj_offsets[v + 1] - adj_offsets[v]);
-  var nodes = params.node_count;
-  var edges = arrayLength(&adj_data);
+  for (var edge = adj_offsets[v]; edge < adj_offsets[v + 1u]; edge = edge + 1u) {
+    let u = adj_data[edge];
+    if ((u < v)) {
+      for (var edge = adj_offsets[v]; edge < adj_offsets[v + 1u]; edge = edge + 1u) {
+        let w = adj_data[edge];
+        if ((w > v)) {
+          if (findEdge(u, w)) {
+            triangle_count += u32(1);
+          }
+        }
+      }
+    }
+  }
 }
