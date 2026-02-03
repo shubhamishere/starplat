@@ -1,5 +1,8 @@
 DIGIT       [0-9]
 ALPHANUM    [a-zA-Z][a-zA-Z0-9_]*
+STRING  \"[^\"\n]*\"
+
+
 WS  [ \t\v\n\f]
 NEGATE [-]
 
@@ -26,6 +29,7 @@ NEGATE [-]
 "float"   {printf("Type: %s", yytext);  return T_FLOAT;}
 "double"  {printf("Type: %s", yytext);  return T_DOUBLE;}
 "bool"    {printf("Type: %s", yytext);  return T_BOOL;}
+"string" {printf("Type: %s",yytext); return T_STRING;}
 "auto&"    {printf("Type: %s", yytext);  return T_AUTOREF;}
 
 "forall"  {printf("Keyword-forall: %s", yytext); return T_FORALL;}
@@ -42,6 +46,9 @@ NEGATE [-]
 "while"   {printf("Keyword while: %s", yytext);  return T_WHILE;}
 "do"      {printf("Keyword do: %s", yytext);  return T_DO;}
 "in"      {printf("Keyword in ");  return T_IN;}
+"loop"    {printf("Keyword loop "); return T_LOOP;}
+"to"      {printf("Keyword to "); return T_TO;}
+"by"      {printf("Keyword by "); return T_BY;}
 "fixedPoint" {printf("Keyword fixedPoint"); return T_FIXEDPOINT;}
 "until"      {printf("Keyword until");  return T_UNTIL;}
 "iterateInBFS"  {printf("iterateInBFS");  return T_BFS;}
@@ -55,7 +62,10 @@ NEGATE [-]
 "Batch"         {printf("batch"); return T_BATCH ;} 
 "OnDelete"      {printf("Ondelete") ; return T_ONDELETE;}
 "OnAdd"      {printf("Onadd") ; return T_ONADD;}
+"allocate"      {printf("allocate") ; return T_ALLOCATE;}
  
+ "break"         {printf("break") ; return T_BREAK;}
+"continue"      {printf("continue") ; return T_CONTINUE;}
 
 
 "+="					{ printf ("ADD_ASSIGN "); return T_ADD_ASSIGN;}
@@ -75,6 +85,7 @@ NEGATE [-]
 ">="					{ printf ( "GE_OP");  return T_GE_OP;}
 "=="					{ printf ( "EQ_OP");  return T_EQ_OP;}
 "!="					{ printf ( "NE_OP");  return T_NE_OP;}
+"\*"                    { printf ( "ASTERISK_SYMBOL");  return T_ASTERISK;}
 
 ";"					{ printf ( "';'"); return ';' ;}
 ("{"|"<%")				{ printf ( "'{'") ;  return '{' ;}
@@ -116,7 +127,10 @@ NEGATE [-]
 
  /* Graph Types */
 "Graph" 	{printf("Graph Type"); return T_GRAPH;}
+"GraphList" {printf("Graph List Type"); return T_GRAPH_LIST;}
+"GNN"       {printf("GNN Type\n"); return T_GNN;}
 "dirGraph" 	{printf("Directed Graph Type");  return T_DIR_GRAPH;}
+"geomCompleteGraph" {printf("Geometric Complete Graph Type");  return T_GEOMCOMPLETEGRAPH;}
 "node" 		{printf("Node Type");  return T_NODE;}
 "edge" 		{printf("Edge Type");return T_EDGE;}
 "propNode" {printf("Node Property");  return T_NP;}
@@ -129,10 +143,14 @@ NEGATE [-]
 "updates" {printf("updates type"); return T_UPDATES;}
 "container" {printf("container type"); return T_CONTAINER;}
 "std::vector" {printf ("vector type"); return T_VECTOR;}
+"std::set" {printf ("set type"); return T_SET;}
 "nodeMap"  {printf("nodeMap type"); return T_NODEMAP;}
 "hashMap"  {printf("hashMap type"); return T_HASHMAP;}
 "hashSet"  {printf("hashSet type"); return T_HASHSET;}
 "Point" {printf("Point type"); return T_POINT;}
+"Edge" {printf("Undirected edge type"); return T_UNDIREDGE;}
+"Triangle" {printf("Triangle type"); return T_TRIANGLE;}
+"BTree"  {printf("btree type"); return T_BTREE;}
 
 
  /* Numbers and Identifies */
@@ -142,6 +160,7 @@ NEGATE [-]
                         return FLOAT_NUM;}
 {NEGATE}*{DIGIT}{DIGIT}*     {  yylval.ival=atoi(yytext);
                             return INT_NUM;}
+{STRING}            { yylval.text=yytext; printf("HELLO STRING %s",yytext); return STRING_VAL;}
 
 [ \n\t]	{ printf("\n");}
 {WS}+					{ /* whitespace separates tokens */ }

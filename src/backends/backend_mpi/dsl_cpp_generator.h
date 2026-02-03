@@ -68,6 +68,7 @@ namespace spmpi
     virtual void generateStatement(statement *stmt);
     void generateAssignmentStmt(assignment *assignStmt);
     void generateWhileStmt(whileStmt *whilestmt);
+    void generateSimpleForStmt(simpleForStmt *simpleFor);
     void generateForAll(forallStmt *forAll);
     void generateFixedPoint(fixedPointStmt *fixedPoint);
     void generateIfStmt(ifStmt *ifstmt);

@@ -63,6 +63,8 @@ namespace spmpi
 
         header.pushString("#include");
         addIncludeToFile("../mpi_header/graph_mpi.h", header, false);
+        header.pushString("#include");
+        addIncludeToFile("BTree.h", header, false);
         header.NewLine();
         main.pushString("#include");
         sprintf(temp, "%s.h", fileName);
@@ -153,6 +155,9 @@ namespace spmpi
             targetFile.pushString(convertToCppType(type, true));
 
             targetFile.pushString(" ");
+
+            if((*itr)->isByReference())
+                targetFile.pushString("&");
 
             targetFile.pushString((*itr)->getIdentifier()->getIdentifier());
 

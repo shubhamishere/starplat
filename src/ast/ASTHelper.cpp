@@ -190,6 +190,14 @@ public:
         return nodeList;
     }
 
+    static ASTNode *createParamNode(ASTNode *type, bool byReference, ASTNode *id)
+    {
+        //~ Identifier* paramId=(Identifier*)id;
+        // cout<<"PARAMID NODE VALUE "<<paramId->getIdentifier()<<"\n";
+        formalParam *formalParamNode = formalParam::createFormalParam((Type *)type, byReference, (Identifier *)id);
+        return formalParamNode;
+    }
+
     static ASTNode *createParamNode(ASTNode *type, ASTNode *id)
     {
         //~ Identifier* paramId=(Identifier*)id;
@@ -209,6 +217,13 @@ public:
         declaration *declNode = declaration::assign_Declaration((Type *)type, (Identifier *)id, (Expression *)exprAssigned);
         return declNode;
     }
+
+    static ASTNode *createParamDeclNode(ASTNode *type, ASTNode *id, ASTNode *exprAssigned)
+    {
+        declaration *declNode = declaration::param_Declaration((Type *)type, (Identifier *)id, (Expression *)exprAssigned);
+        return declNode;
+    }
+
     static ASTNode *createPrimitiveTypeNode(int typeId)
     { // cout<<"Inside Func";
         Type *typeNode = Type::createForPrimitive(typeId, 1);
@@ -221,10 +236,28 @@ public:
         return pointTypeNode;
     }
 
+    static ASTNode *createUndirectedEdgeTypeNode(int typeId)
+    {
+        Type *undirEdgeTypeNode = Type::createForUndirectedEdgeType(typeId);
+        return undirEdgeTypeNode;
+    }
+
+    static ASTNode *createTriangleTypeNode(int typeId)
+    {
+        Type *triangleTypeNode = Type::createForTriangleType(typeId);
+        return triangleTypeNode;
+    }
+
     static ASTNode *createGraphTypeNode(int typeId, Identifier *targetGraph)
     {
         Type *typeNode = Type::createForGraphType(typeId, 2, targetGraph);
         return typeNode;
+    }
+    static ASTNode* createGNNTypeNode(int typeId, Identifier* targetGraph)
+    {
+        Type* typeNode=Type::createForGNNType(typeId,2,targetGraph);
+        return typeNode;
+
     }
     static ASTNode *createHeapTypeNode(int typeId)
     {
@@ -234,6 +267,11 @@ public:
     static ASTNode *createMapTypeNode(int typeId)
     {
         Type *typeNode = Type::createForMapType(typeId, 1);
+        return typeNode;
+    }
+    static ASTNode *createBtreeTypeNode(int typeId)
+    {
+        Type *typeNode = Type::createForBtreeType(typeId, 1);
         return typeNode;
     }
     static ASTNode *createCollectionTypeNode(int typeId, ASTNode *targetGraph)
@@ -304,6 +342,22 @@ public:
         return unaryStmt;
     }
 
+    static ASTNode* createNodeForBreakStatement(){
+        statement *breakStmtNode = breakStmt::createBreakStmt();
+        return breakStmtNode;
+    }
+
+    static ASTNode* createNodeForContinueStatement(){
+        statement *continueStmtNode = continueStmt::createContinueStmt();
+        return continueStmtNode;
+    }
+
+    static ASTNode* createNodeForAllocaExpr(ASTNode* type, list<argument*>argList){
+        Expression *allocaExprNode = allocaExpr::createAllocaExpr((Type *)type, argList);
+        return allocaExprNode;
+    }
+
+
     static ASTNode *createNodeForProcCall(ASTNode *proc_callId, list<argument *> argList, ASTNode *indexExprSent)
     {
         proc_callExpr *proc_callExprNode;
@@ -346,6 +400,15 @@ public:
     {
 
         Type *containerNode = Type::createForContainerType(typeId, (Type *)innerType, argList, (Type *)innerTypeSize);
+
+        return containerNode;
+    }
+
+    static ASTNode *createContainerTypeRefNode(int typeId, ASTNode *innerType, list<argument *> argList, ASTNode *innerTypeSize)
+    {
+
+        Type *containerNode = Type::createForContainerType(typeId, (Type *)innerType, argList, (Type *)innerTypeSize);
+        containerNode->setRefType();
 
         return containerNode;
     }
@@ -419,6 +482,13 @@ public:
         return exprBVal;
     }
 
+    static ASTNode* createNodeForSval(char *value)
+{
+    Expression* exprSVal=Expression::nodeForStringConstant(value);
+    return exprSVal;
+}
+
+
     static ASTNode *createNodeForINF(bool infinityFlag)
     {
         Expression *exprINFVal = Expression::nodeForInfinity(infinityFlag);
@@ -489,6 +559,13 @@ public:
         whileStmtNode = whileStmt::create_whileStmt((Expression *)iterCondition, (blockStatement *)body);
         return whileStmtNode;
     }
+    static ASTNode *createNodeForSimpleForStmt(ASTNode *primitiveType, ASTNode *loopVariable, ASTNode *rhs, ASTNode *iterCondition, ASTNode *updateExpression, ASTNode *body)
+    {
+        statement* simpleForStmtNode;
+        printf("Inside createNodeForSimpleForStmt\n");
+        simpleForStmtNode = simpleForStmt::createSimpleForStmt((Type*)primitiveType, (Identifier*)loopVariable, (Expression*)rhs, (Expression*)iterCondition, (Expression*)updateExpression, (blockStatement*)body);
+        return simpleForStmtNode;
+    }
     static ASTNode *createNodeForDoWhileStmt(ASTNode *iterCondition, ASTNode *body)
     {
         statement *dowhileStmtNode;
@@ -538,6 +615,12 @@ public:
         }
 
         return forallStmtNode;
+    }
+    static ASTNode* createNodeForLoopStmt(ASTNode* iterator, ASTNode* startIndex, ASTNode* endIndex, ASTNode* step, ASTNode* body){
+        statement* loopStmtNode;
+        Identifier *id = (Identifier *)iterator;
+        loopStmtNode = loopStmt::createloopStmt(id,(Expression*)startIndex,(Expression*)endIndex, (Expression*)step, (statement*)body);
+        return loopStmtNode;   
     }
     static ASTNode *createNodeforReductionCall(int reductionOperationType, list<argument *> argList)
     {
