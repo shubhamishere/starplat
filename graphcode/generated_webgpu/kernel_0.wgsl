@@ -180,7 +180,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
         let w = adj_data[edge];
         if ((w > v)) {
           if (findEdge(u, w)) {
-            triangle_count += u32(1);
+            atomicAdd(&result, u32(1));
           }
         }
       }

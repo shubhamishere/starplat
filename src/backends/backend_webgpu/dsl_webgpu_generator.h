@@ -7,6 +7,7 @@
 #include <fstream>
 #include <vector>
 #include <map>
+#include <set>
 
 namespace spwebgpu {
 
@@ -49,6 +50,10 @@ private:
   };
 
   std::vector<PropInfo> propInfos;
+  // Names of variables declared at function level (outside forall bodies).
+  // Used in WGSL generation to correctly route function-level accumulators
+  // (e.g. triangle_count) to atomicAdd(&result,...) instead of bare WGSL vars.
+  std::set<std::string> funcLevelVarNames;
   void buildPropertyRegistry(Function* func);
   std::string mapTypeToWGSL(Type* type);
   bool isNumericIntegerType(Type* type);

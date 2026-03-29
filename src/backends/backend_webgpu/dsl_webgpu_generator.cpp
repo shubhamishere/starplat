@@ -85,6 +85,23 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   
   // Reset kernel counter for a fresh generation
   kernelCounter = 0;
+
+  // Collect function-level variable declarations (direct children of function body, outside foralls).
+  // These must NOT be emitted as bare WGSL variables inside kernels — they map to &result.
+  funcLevelVarNames.clear();
+  if (func->getBlockStatement()) {
+    blockStatement* topBlock = static_cast<blockStatement*>(func->getBlockStatement());
+    for (statement* s : topBlock->returnStatements()) {
+      if (s->getTypeofNode() == NODE_DECL) {
+        declaration* d = static_cast<declaration*>(s);
+        Identifier* vid = d->getdeclId();
+        if (vid && vid->getIdentifier()) {
+          funcLevelVarNames.insert(std::string(vid->getIdentifier()));
+        }
+      }
+    }
+  }
+
   // Pre-scan: emit WGSL kernels for each forall encountered in order
   if (func->getBlockStatement()) {
     blockStatement* block = static_cast<blockStatement*>(func->getBlockStatement());
@@ -908,16 +925,20 @@ void dsl_webgpu_generator::generateWGSLStatement(ASTNode* node, std::ofstream& w
     }
     bool rhsIsFloat = (rhsExpr && isFloatExpr(rhsExpr));
 
-    // Helper to check if target is a local variable (not a property)
+    // Helper to check if target is a local variable (kernel-scope, not a property or function-level var).
+    // Function-level variables (e.g. triangle_count) are declared outside forall bodies; they are NOT
+    // in WGSL scope and must be routed to atomicAdd(&result,...) instead.
     auto isLocalVariable = [&](Identifier* id) -> bool {
       if (!id) return false;
       std::string name = id->getIdentifier();
-      // Check if it's a known property
+      // Known properties are never local
       for (const auto& prop : propInfos) {
         if (prop.name == name) return false;
       }
-      // Check if it matches common local variable patterns or is not a global property
-      return (name.find("_count") != std::string::npos || 
+      // Function-level variables are not local to the WGSL kernel
+      if (funcLevelVarNames.count(name) > 0) return false;
+      // Variables matching kernel-local naming patterns that are not function-level
+      return (name.find("_count") != std::string::npos ||
               name.find("_sum") != std::string::npos ||
               name.find("local_") != std::string::npos ||
               name == "count" || name == "sum" || name == "temp");
