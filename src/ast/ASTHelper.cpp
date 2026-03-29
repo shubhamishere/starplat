@@ -649,21 +649,31 @@ public:
 
     static ASTNode *createNodeForReductionOpStmt(ASTNode *leftSide, int reduction_op, ASTNode *rightSide)
     {
-        reductionCallStmt *reductionStmtNode;
+        printf("DEBUG: createNodeForReductionOpStmt. LeftSideType: %d\n", leftSide->getTypeofNode());
+        reductionCallStmt *reductionStmtNode = NULL;
         if (leftSide->getTypeofNode() == NODE_ID)
         {
+            printf("DEBUG: NODE_ID reduction\n");
             reductionStmtNode = reductionCallStmt::id_reduc_opStmt((Identifier *)leftSide, reduction_op, (Expression *)rightSide);
         }
-        if (leftSide->getTypeofNode() == NODE_PROPACCESS)
+        else if (leftSide->getTypeofNode() == NODE_PROPACCESS)
         {
+            printf("DEBUG: NODE_PROPACCESS reduction\n");
             reductionStmtNode = reductionCallStmt::propId_reduc_opStmt((PropAccess *)leftSide, reduction_op, (Expression *)rightSide);
         }
-        if (leftSide->getTypeofNode() == NODE_EXPR)
+        else if (leftSide->getTypeofNode() == NODE_EXPR)
         {
-
+             printf("DEBUG: NODE_EXPR reduction\n");
+             Expression* expr = (Expression*)leftSide;
+             printf("DEBUG: Expr Type: %d\n", expr->getExpressionFamily());
             reductionStmtNode = reductionCallStmt::container_reduc_opStmt((Expression *)leftSide, reduction_op, (Expression *)rightSide);
         }
-
+        else {
+            printf("ERROR: Unknown LeftSideType for reduction: %d\n", leftSide->getTypeofNode());
+            assert(false && "Unknown LeftSideType for reduction");
+        }
+        
+        assert(reductionStmtNode != NULL);
         return reductionStmtNode;
     }
 

@@ -1,0 +1,238 @@
+[WASM Build] Generating parser files...
+lexer.l:107: warning, rule cannot be matched
+lrparser.y:1.1-7: warning: POSIX Yacc does not support %define [-Wyacc]
+    1 | %define parse.trace
+      | ^~~~~~~
+lrparser.y:76.42-52: warning: POSIX yacc reserves %type to nonterminals [-Wyacc]
+   76 | %type <node> function_def function_data  return_func function_body pa...
+      |                                          ^~~~~~~~~~~
+lrparser.y: warning: 104 shift/reduce conflicts [-Wconflicts-sr]
+lrparser.y: warning: 142 reduce/reduce conflicts [-Wconflicts-rr]
+lrparser.y: note: rerun with option '-Wcounterexamples' to generate conflict counterexamples
+lrparser.y:489.20-56: warning: rule useless in parser due to conflicts [-Wother]
+  489 | 		 | leftSide{ $$=Util::createNList($1);;};
+      |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+lrparser.y:494.13-47: warning: rule useless in parser due to conflicts [-Wother]
+  494 |           | val    { $$=Util::createNList($1);};
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+lrparser.y:495.21-496.64: warning: rule useless in parser due to conflicts [-Wother]
+  495 | 		  | leftSide  { ASTNode* node = Util::createNodeForId...
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+[WASM Build] Compiling to WASM...
+src/symbolutil/SymbolTableBuilder.cpp:178:11: warning: 16 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  178 |   switch (stmt->getTypeofNode())
+      |           ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+In file included from lrparser.y:10:
+src/parser/../analyser/deviceVars/deviceVarsAnalyser.h:152:15: warning: enumeration value 'NOT_INITIALIZED' not handled in switch [-Wswitch]
+  152 |       switch (cType)
+      |               ^~~~~
+1 warning generated.
+lexer.l:159:55: warning: '/*' within block comment [-Wcomment]
+  159 | { yylval.text=yytext; /*printf("HELLO ID %s",yytext); /* printf("\n");*/ return ID;}
+      |                                                       ^
+1 warning generated.
+src/analyser/dataRace/dataRaceAnalyser.cpp:595:13: warning: 25 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  595 |     switch (stmt->getTypeofNode())
+      |             ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+src/analyser/attachProp/attachPropAnalyser.cpp:327:11: warning: 25 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  327 |   switch (stmt->getTypeofNode())
+      |           ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+src/analyser/pushpull/pushpullAnalyser.cpp:112:17: warning: using the result of an assignment as a condition without parentheses [-Wparentheses]
+  112 |            if(pp=0){
+      |               ~~^~
+src/analyser/pushpull/pushpullAnalyser.cpp:112:17: note: place parentheses around the assignment to silence this warning
+  112 |            if(pp=0){
+      |                 ^ 
+      |               (   )
+src/analyser/pushpull/pushpullAnalyser.cpp:112:17: note: use '==' to turn this assignment into an equality comparison
+  112 |            if(pp=0){
+      |                 ^
+      |                 ==
+src/analyser/pushpull/pushpullAnalyser.cpp:121:17: warning: 26 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  121 |         switch (stmt->getTypeofNode())
+      |                 ^~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+In file included from src/analyser/deviceVars/deviceVarsAnalyser.cpp:1:
+src/analyser/deviceVars/deviceVarsAnalyser.h:152:15: warning: enumeration value 'NOT_INITIALIZED' not handled in switch [-Wswitch]
+  152 |       switch (cType)
+      |               ^~~~~
+src/analyser/deviceVars/deviceVarsAnalyser.cpp:363:11: warning: 20 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  363 |   switch (stmt->getTypeofNode())
+      |           ^~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+In file included from src/analyser/deviceVars/deviceVarsInit.cpp:1:
+src/analyser/deviceVars/deviceVarsAnalyser.h:152:15: warning: enumeration value 'NOT_INITIALIZED' not handled in switch [-Wswitch]
+  152 |       switch (cType)
+      |               ^~~~~
+src/analyser/deviceVars/deviceVarsInit.cpp:31:13: warning: 20 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+   31 |     switch (stmt->getTypeofNode())
+      |             ^~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+In file included from src/analyser/deviceVars/deviceVarsPrint.cpp:1:
+src/analyser/deviceVars/deviceVarsAnalyser.h:152:15: warning: enumeration value 'NOT_INITIALIZED' not handled in switch [-Wswitch]
+  152 |       switch (cType)
+      |               ^~~~~
+src/analyser/deviceVars/deviceVarsPrint.cpp:94:11: warning: 26 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+   94 |   switch (stmt->getTypeofNode())
+      |           ^~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+In file included from src/analyser/deviceVars/deviceVarsTransfer.cpp:1:
+src/analyser/deviceVars/deviceVarsAnalyser.h:152:15: warning: enumeration value 'NOT_INITIALIZED' not handled in switch [-Wswitch]
+  152 |       switch (cType)
+      |               ^~~~~
+src/analyser/deviceVars/deviceVarsTransfer.cpp:40:13: warning: 20 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+   40 |     switch (stmt->getTypeofNode())
+      |             ^~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+In file included from src/analyser/deviceVars/getUsedVars.cpp:1:
+src/analyser/deviceVars/deviceVarsAnalyser.h:152:15: warning: enumeration value 'NOT_INITIALIZED' not handled in switch [-Wswitch]
+  152 |       switch (cType)
+      |               ^~~~~
+src/analyser/deviceVars/getUsedVars.cpp:293:11: warning: 24 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  293 |   switch (stmt->getTypeofNode())
+      |           ^~~~~~~~~~~~~~~~~~~~~
+2 warnings generated.
+src/analyser/blockVars/blockVarsInit.cpp:17:12: warning: 19 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+   17 |     switch(stmt->getTypeofNode())
+      |            ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+src/analyser/blockVars/getUsedVars.cpp:316:11: warning: 19 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+  316 |   switch (stmt->getTypeofNode())
+      |           ^~~~~~~~~~~~~~~~~~~~~
+1 warning generated.
+src/backends/backend_cuda/dsl_cpp_generator.cpp:3152:86: warning: format specifies type 'int' but the argument has type 'long' [-Wformat]
+ 3152 |         sprintf(strBuffer, "cudaMalloc(&d_graph_list_data, sizeof(int)*(V-1)*2*%d);",count->getIntegerConstant());
+      |                                                                                ~~    ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                                                %ld
+src/backends/backend_cuda/dsl_cpp_generator.cpp:3154:84: warning: format specifies type 'int' but the argument has type 'long' [-Wformat]
+ 3154 |         sprintf(strBuffer, "cudaMalloc(&d_graph_list_meta, sizeof(int)*(V+1)*%d);",count->getIntegerConstant());
+      |                                                                              ~~    ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                                              %ld
+src/backends/backend_cuda/dsl_cpp_generator.cpp:3156:165: warning: format specifies type 'int' but the argument has type 'long' [-Wformat]
+ 3156 |         sprintf(strBuffer, "%s(%s, %s, %s, %s, %s, %s, %d);", "makeGraphCopy","h_mst_data", "h_mst_meta", "V", "(V-1)*2", "h_graph_list_data", "h_graph_list_meta", count->getIntegerConstant());
+      |                                                        ~~                                                                                                           ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                        %ld
+src/backends/backend_cuda/dsl_cpp_generator.cpp:3158:128: warning: format specifies type 'int' but the argument has type 'long' [-Wformat]
+ 3158 |         sprintf(strBuffer, "cudaMemcpy(d_graph_list_data, h_graph_list_data, sizeof(int)*(V-1)*2*%d, cudaMemcpyHostToDevice);",count->getIntegerConstant());
+      |                                                                                                  ~~                            ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                                                                  %ld
+src/backends/backend_cuda/dsl_cpp_generator.cpp:3160:126: warning: format specifies type 'int' but the argument has type 'long' [-Wformat]
+ 3160 |         sprintf(strBuffer, "cudaMemcpy(d_graph_list_meta, h_graph_list_meta, sizeof(int)*(V+1)*%d, cudaMemcpyHostToDevice);",count->getIntegerConstant());
+      |                                                                                                ~~                            ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                                                                %ld
+src/backends/backend_cuda/dsl_cpp_generator.cpp:4236:48: warning: data argument not used by format string [-Wformat-extra-args]
+ 4236 |       sprintf(strBuffer,"auto edgeCount = 0;", gId);
+      |                         ~~~~~~~~~~~~~~~~~~~~~  ^
+6 warnings generated.
+src/backends/backend_openACC/dsl_cpp_generator.cpp:576:13: warning: expression result unused [-Wunused-value]
+  576 |             itr1;
+      |             ^~~~
+src/backends/backend_openACC/dsl_cpp_generator.cpp:2882:7: warning: '/*' within block comment [-Wcomment]
+ 2882 |       /*if(type->isPropType())
+      |       ^
+src/backends/backend_openACC/dsl_cpp_generator.cpp:2891:31: warning: '/*' within block comment [-Wcomment]
+ 2891 |     /*  targetFile.pushString(/*createParamName(*//*(*itr)->getIdentifier()->getIdentifier());
+      |                               ^
+src/backends/backend_openACC/dsl_cpp_generator.cpp:2892:5: warning: '/*' within block comment [-Wcomment]
+ 2892 |     /*  if(argumentTotal>0)
+      |     ^
+src/backends/backend_openACC/dsl_cpp_generator.cpp:3015:13: warning: 26 enumeration values not handled in switch: 'NODE_ID', 'NODE_PROPACCESS', 'NODE_FUNC'... [-Wswitch]
+ 3015 |     switch (stmt->getTypeofNode()) {
+      |             ^~~~~~~~~~~~~~~~~~~~~
+5 warnings generated.
+src/backends/backend_omp/dsl_cpp_generator.cpp:421:11: warning: expression result unused [-Wunused-value]
+  421 |           itr1;
+      |           ^~~~
+src/backends/backend_omp/dsl_cpp_generator.cpp:711:7: warning: '/*' within block comment [-Wcomment]
+  711 |       /*if(asmt->getParent()->getParent()->getParent()->getParent()->getTypeofNode()==NODE_ITRBFS)
+      |       ^
+src/backends/backend_omp/dsl_cpp_generator.cpp:1141:5: warning: '/*' within block comment [-Wcomment]
+ 1141 |     /*
+      |     ^
+src/backends/backend_omp/dsl_cpp_generator.cpp:2692:11: warning: '/*' within block comment [-Wcomment]
+ 2692 |           /* if(isNot)------chopped out.
+      |           ^
+src/backends/backend_omp/dsl_cpp_generator.cpp:3124:9: warning: '/*' within block comment [-Wcomment]
+ 3124 |         /*if(type->isPropType())
+      |         ^
+src/backends/backend_omp/dsl_cpp_generator.cpp:3133:31: warning: '/*' within block comment [-Wcomment]
+ 3133 |     /*  targetFile.pushString(/*createParamName(*/ /*(*itr)->getIdentifier()->getIdentifier());
+      |                               ^
+src/backends/backend_omp/dsl_cpp_generator.cpp:3134:6: warning: '/*' within block comment [-Wcomment]
+ 3134 |      /*  if(argumentTotal>0)
+      |      ^
+7 warnings generated.
+src/backends/backend_omp/dsl_dyn_cpp_generator.cpp:609:5: warning: '/*' within block comment [-Wcomment]
+  609 |     /*
+      |     ^
+src/backends/backend_omp/dsl_dyn_cpp_generator.cpp:945:31: warning: '/*' within block comment [-Wcomment]
+  945 |       /*targetFile.pushString(/*createParamName(*//*(*itr)->getIdentifier()->getIdentifier());
+      |                               ^
+src/backends/backend_omp/dsl_dyn_cpp_generator.cpp:946:5: warning: '/*' within block comment [-Wcomment]
+  946 |     /*  if(argumentTotal>0)
+      |     ^
+3 warnings generated.
+src/backends/backend_hip/dsl_cpp_generator.cpp:407:93: warning: adding 'int' to a string does not append to the string [-Wstring-plus-int]
+  407 |             string temp = "Generation function not implemented for this node! and type is " + (int)stmt->getTypeofNode();
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/backends/backend_hip/dsl_cpp_generator.cpp:407:93: note: use array indexing to silence this warning
+  407 |             string temp = "Generation function not implemented for this node! and type is " + (int)stmt->getTypeofNode();
+      |                                                                                             ^                           
+      |                           &                                                                 [                           ]
+src/backends/backend_hip/dsl_cpp_generator.cpp:656:35: warning: object backing the pointer will be destroyed at the end of the full-expression [-Wdangling-gsl]
+  656 |             const char *varType = ConvertToCppType(type).c_str();
+      |                                   ^~~~~~~~~~~~~~~~~~~~~~
+src/backends/backend_hip/dsl_cpp_generator.cpp:822:39: warning: object backing the pointer will be destroyed at the end of the full-expression [-Wdangling-gsl]
+  822 |                 const char *varType = ConvertToCppType(typeB).c_str(); // DONE: get the type from id
+      |                                       ^~~~~~~~~~~~~~~~~~~~~~~
+src/backends/backend_hip/dsl_cpp_generator.cpp:1439:34: warning: object backing the pointer will be destroyed at the end of the full-expression [-Wdangling-gsl]
+ 1439 |             const char *typVar = ConvertToCppType(id->getSymbolInfo()->getType()).c_str();
+      |                                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+src/backends/backend_hip/dsl_cpp_generator.cpp:3031:39: warning: object backing the pointer will be destroyed at the end of the full-expression [-Wdangling-gsl]
+ 3031 |                 const char *varType = ConvertToCppType(declStmt->getType()).c_str();
+      |                                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5 warnings generated.
+src/backends/backend_mpi/dsl_cpp_expression_generator.cpp:233:75: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+  233 |                     if (!startsWith(proc->getMethodId()->getIdentifier(), "std::"))
+      |                                                                           ^
+1 warning generated.
+src/backends/backend_mpi/bAnalyzer/bAnalyzer.cc:174:20: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+  174 |     char *prefix = "_t";
+      |                    ^
+src/backends/backend_mpi/bAnalyzer/bAnalyzer.cc:557:1: warning: non-void function does not return a value in all control paths [-Wreturn-type]
+  557 | }
+      | ^
+2 warnings generated.
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:1263:20: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 1263 |         char* ch = "V+1";
+      |                    ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:1265:14: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 1265 |           ch="E";
+      |              ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:1267:21: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 1267 |         char* ch1 = "V";
+      |                     ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:1269:15: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 1269 |           ch1="E-1";
+      |               ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:1271:21: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 1271 |         char* ch2 = "numBlocks";
+      |                     ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:1273:17: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 1273 |           ch2 = "numBlocks_Edge";
+      |                 ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:2858:14: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 2858 |   char *ch = "V+1";
+      |              ^
+src/backends/backend_multigpu/dsl_cpp_generator.cpp:2860:8: warning: ISO C++11 does not allow conversion from string literal to 'char *' [-Wwritable-strings]
+ 2860 |     ch="E";
+      |        ^
+8 warnings generated.
+src/backends/backend_amd/dsl_cpp_generator.cpp:1256:40: warning: more '%' conversions than data arguments [-Wformat-insufficient-args]
+ 1256 |         sprintf(strBuffer,"//Creating %s kernel from program");
+      |                                       ~^
+1 warning generated.
+[WASM Build] Success! Generated starplat.js and starplat.wasm

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StarPlat Compiler-as-a-Service</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f4f4f9;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .editor-pane {
+            flex: 1;
+        }
+
+        .controls-pane {
+            flex: 0 0 300px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        textarea {
+            width: 100%;
+            height: 500px;
+            font-family: monospace;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            resize: vertical;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        select,
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #0052a3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .info {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>StarPlat Compiler</h1>
+    <p>Generate high-performance graph algorithms for CUDA, MPI, OpenMP, and WebGPU directly in your browser.</p>
+
+    <div class="container">
+        <div class="editor-pane">
+            <label for="dslInput">StarPlat DSL Code</label>
+            <textarea id="dslInput" spellcheck="false">// Example Triangle Counting
+Static Graph g
+Graph g
+int count = 0
+Function Compute_TC(g)
+    Foreach(u in g.nodes())
+        Foreach(v in g.neighbors(u))
+            if(u < v)
+                Foreach(w in g.neighbors(v))
+                    if(v < w)
+                        if(g.is_edge(u, w))
+                            count = count + 1
+                        endif
+                    endif
+                EndFor
+            endif
+        EndFor
+    EndFor
+    return count
+EndFunc
+</textarea>
+        </div>
+
+        <div class="controls-pane">
+            <label for="graphType">Graph Type</label>
+            <select id="graphType">
+                <option value="-s">Static Graph (-s)</option>
+                <option value="-d">Dynamic Graph (-d)</option>
+            </select>
+
+            <label for="backend">Backend Target</label>
+            <select id="backend">
+                <option value="cuda">CUDA</option>
+                <option value="omp">OpenMP</option>
+                <option value="mpi">MPI</option>
+                <option value="sycl">SYCL</option>
+                <option value="hip">HIP</option>
+                <option value="acc">OpenACC</option>
+            </select>
+
+            <button id="compileBtn" onclick="compileCode()">Generate Code</button>
+
+            <div id="status" class="info">Loading compiler...</div>
+            <div id="downloadArea" style="display:none; margin-top:20px;">
+                <!-- Downloads will appear here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Determine where output goes based on backend -->
+    <script>
+        const backendMap = {
+            'cuda': 'generated_cuda',
+            'omp': 'generated_omp',
+            'mpi': 'generated_mpi',
+            'webgpu': 'generated_webgpu',
+            'sycl': 'generated_sycl',
+            'hip': 'generated_hip',
+            'acc': 'generated_openacc'
+        };
+
+        var Module = {
+            onRuntimeInitialized: function () {
+                document.getElementById('status').innerText = "Compiler Ready";
+                document.getElementById('compileBtn').disabled = false;
+            },
+            print: function (text) { console.log("[StarPlat stdout]: " + text); },
+            printErr: function (text) { console.error("[StarPlat stderr]: " + text); }
+        };
+
+        function compileCode() {
+            const dslCode = document.getElementById('dslInput').value;
+            const graphType = document.getElementById('graphType').value;
+            const backend = document.getElementById('backend').value;
+            const statusDiv = document.getElementById('status');
+            const downloadArea = document.getElementById('downloadArea');
+
+            statusDiv.className = 'info';
+            statusDiv.innerText = "Compiling...";
+            downloadArea.innerHTML = '';
+            downloadArea.style.display = 'none';
+
+            try {
+                // 1. Write Input File
+                Module.FS.writeFile('/input.sp', dslCode);
+
+                // 2. Prepare Output Directories
+                // The compiler writes to "../graphcode/..." so we need to simulate that structure.
+                // We create a '/app/src' dir to run from, so "../graphcode" maps to '/app/graphcode'
+                try { Module.FS.mkdir('/app'); } catch (e) { }
+                try { Module.FS.mkdir('/app/src'); } catch (e) { }
+                try { Module.FS.mkdir('/app/graphcode'); } catch (e) { }
+                try { Module.FS.mkdir('/app/graphcode/' + backendMap[backend]); } catch (e) { }
+
+                // Change working directory to /app/src
+                Module.FS.chdir('/app/src');
+
+                // 3. Run Compiler
+                // argv: ['./StarPlat', '-s', '-f', '/input.sp', '-b', 'cuda']
+                // Note: input file is at root /input.sp, so we pass that absolute path.
+                Module.callMain([graphType, '-f', '/input.sp', '-b', backend]);
+
+                statusDiv.className = 'success';
+                statusDiv.innerText = "Compilation complete!";
+
+                // 4. Find and Zip/Download Output
+                // We verify if files exist in the expected output folder
+                const outDir = '/app/graphcode/' + backendMap[backend];
+                try {
+                    const files = Module.FS.readdir(outDir);
+                    const validFiles = files.filter(f => f !== '.' && f !== '..');
+
+                    if (validFiles.length === 0) {
+                        throw new Error("No output files generated.");
+                    }
+
+                    downloadArea.style.display = 'block';
+
+                    validFiles.forEach(filename => {
+                        const filePath = outDir + '/' + filename;
+                        const content = Module.FS.readFile(filePath, { encoding: 'utf8' });
+                        const blob = new Blob([content], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = filename;
+                        link.innerText = "Download " + filename;
+                        link.style.display = 'block';
+                        link.style.marginBottom = '10px';
+                        link.className = 'download-link';
+                        downloadArea.appendChild(link);
+                    });
+
+                } catch (e) {
+                    statusDiv.className = 'error';
+                    statusDiv.innerText = "Error reading output: " + e.message;
+                }
+
+            } catch (e) {
+                statusDiv.className = 'error';
+                statusDiv.innerText = "Compiler crashed: " + e.message;
+                console.error(e);
+            }
+        }
+    </script>
+    <script async src="starplat.js"></script>
+</body>
+
+</html>

@@ -16,7 +16,7 @@
 #include "../../symbolutil/SymbolTable.h"
 #include "../dslCodePad.h"
 
-#include "analyzer_utility.h"
+#include "../../analyser/analyserUtil.h"
 
 #define HIT_CHECK std::cout << "UNIMPL Hit at line " << __LINE__ << " of function " << __func__ << " in file " << __FILE__ << "\n";
 #define propKey pair<TableEntry *, TableEntry *>
