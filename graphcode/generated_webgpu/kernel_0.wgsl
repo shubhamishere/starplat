@@ -6,7 +6,8 @@
 struct Params { node_count: u32; _pad0: u32; _pad1: u32; _pad2: u32; };
 @group(0) @binding(4) var<uniform> params: Params;
 @group(0) @binding(5) var<storage, read_write> result: atomic<u32>;
-@group(0) @binding(6) var<storage, read_write> properties: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read_write> pageRank: array<atomic<u32>>;
+@group(0) @binding(7) var<storage, read_write> pageRank_nxt: array<atomic<u32>>;
 
 var<workgroup> scratchpad: array<u32, 256>;
 var<workgroup> scratchpad_f32: array<f32, 256>;
@@ -173,17 +174,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
     return;
   }
 
-  for (var edge = adj_offsets[v]; edge < adj_offsets[v + 1u]; edge = edge + 1u) {
-    let u = adj_data[edge];
-    if ((u < v)) {
-      for (var edge = adj_offsets[v]; edge < adj_offsets[v + 1u]; edge = edge + 1u) {
-        let w = adj_data[edge];
-        if ((w > v)) {
-          if (findEdge(u, w)) {
-            atomicAdd(&result, u32(1));
-          }
-        }
-      }
-    }
+  var sum: f32 = 0;
+  for (var edge = rev_adj_offsets[v]; edge < rev_adj_offsets[v + 1u]; edge = edge + 1u) {
+    let nbr = rev_adj_data[edge];
+    sum += (pageRank[nbr] / (adj_offsets[nbr + 1] - adj_offsets[nbr]));
   }
+  var val = (((1 - delta) / num_nodes) + (delta * sum));
+  let __oldBits: u32 = atomicLoad(&pageRank_nxt[v]);
+  let __newBits: u32 = bitcast<u32>(f32(val));
+  if (__oldBits != __newBits) { atomicStore(&pageRank_nxt[v], __newBits); atomicAdd(&result, 1u); }
 }

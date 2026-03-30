@@ -20,7 +20,8 @@ public:
   void generate(ASTNode* root, const std::string& outFile);
 
 private:
-  int kernelCounter = 0;
+  int kernelCounter = 0;    // counts regular forall kernels (kernel_N.wgsl)
+  int bfsKernelCounter = 0; // counts BFS kernel pairs (bfs_kernel_N_expand/body.wgsl)
 
   void generateFunc(ASTNode* node, std::ofstream& out);
   void generateBlock(ASTNode* node, std::ofstream& out);
@@ -32,6 +33,9 @@ private:
   void generateHostBody(ASTNode* node, std::ofstream& out, int& launchIndex);
 
   void emitWGSLKernel(const std::string& baseName, ASTNode* forallBody);
+  // Emit a BFS kernel pair: one for frontier expansion, one for body execution
+  void emitBFSWGSLKernel(const std::string& baseName, iterateBFS* bfs);
+  void generateBFS(iterateBFS* bfs, std::ofstream& out, int& launchIndex);
           void generateWGSLStatement(ASTNode* node, std::ofstream& wgslOut, const std::string& indexVar, int indentLevel = 1);
   void generateWGSLExpr(ASTNode* node, std::ofstream& wgslOut, const std::string& indexVar);
   void generateProcCall(proc_callStmt* stmt, std::ofstream& out);

@@ -1,5 +1,6 @@
 #include "dsl_webgpu_generator.h"
 #include <iostream>
+#include <functional>
 #include "../../ast/ASTNodeTypes.hpp"
 
 namespace spwebgpu {
@@ -83,8 +84,9 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
   Function* func = static_cast<Function*>(node);
   std::string funcName = func->getIdentifier() ? func->getIdentifier()->getIdentifier() : "unnamed";
   
-  // Reset kernel counter for a fresh generation
+  // Reset kernel counters for a fresh generation
   kernelCounter = 0;
+  bfsKernelCounter = 0;
 
   // Collect function-level variable declarations (direct children of function body, outside foralls).
   // These must NOT be emitted as bare WGSL variables inside kernels — they map to &result.
@@ -102,33 +104,67 @@ void dsl_webgpu_generator::generateFunc(ASTNode* node, std::ofstream& out) {
     }
   }
 
-  // Pre-scan: emit WGSL kernels for each forall encountered in order
-  if (func->getBlockStatement()) {
-    blockStatement* block = static_cast<blockStatement*>(func->getBlockStatement());
-    for (statement* stmt : block->returnStatements()) {
-      if (stmt->getTypeofNode() == NODE_FORALLSTMT) {
-        std::string kernelName = "kernel_" + std::to_string(kernelCounter);
-        forallStmt* fa = static_cast<forallStmt*>(stmt);
-        emitWGSLKernel(kernelName, fa->getBody());
-        kernelCounter++;
-      }
-      if (stmt->getTypeofNode() == NODE_FIXEDPTSTMT) {
-        // recurse one level: generate kernels for nested foralls in fixedPoint
-        fixedPointStmt* fp = static_cast<fixedPointStmt*>(stmt);
-        if (fp->getBody() && fp->getBody()->getTypeofNode() == NODE_BLOCKSTMT) {
-          blockStatement* fpb = static_cast<blockStatement*>(fp->getBody());
-          for (statement* s2 : fpb->returnStatements()) {
-            if (s2->getTypeofNode() == NODE_FORALLSTMT) {
-              std::string kernelName2 = "kernel_" + std::to_string(kernelCounter);
-              forallStmt* fa2 = static_cast<forallStmt*>(s2);
-              emitWGSLKernel(kernelName2, fa2->getBody());
-              kernelCounter++;
-            }
+  // Pre-scan: recursively walk the entire function AST to emit WGSL kernel files
+  // ONLY for regular forall statements (not BFS-wrapping foralls, not iterateInBFS).
+  // BFS WGSL kernels are emitted lazily by generateBFS() during host code generation.
+  std::function<void(ASTNode*)> prescan = [&](ASTNode* n) {
+    if (!n) return;
+    int t = n->getTypeofNode();
+    if (t == NODE_FORALLSTMT) {
+      forallStmt* fa = static_cast<forallStmt*>(n);
+      // Check if this forall's direct body contains a BFS node.
+      // If so, it's a host-side loop over sources — do NOT emit a WGSL kernel for it.
+      bool bodyHasBFS = false;
+      if (fa->getBody()) {
+        ASTNode* body = fa->getBody();
+        if (body->getTypeofNode() == NODE_BLOCKSTMT) {
+          blockStatement* fb = static_cast<blockStatement*>(body);
+          for (statement* s : fb->returnStatements()) {
+            if (s->getTypeofNode() == NODE_ITRBFS) { bodyHasBFS = true; break; }
           }
+        } else if (body->getTypeofNode() == NODE_ITRBFS) {
+          bodyHasBFS = true;
         }
       }
+      if (!bodyHasBFS) {
+        emitWGSLKernel("kernel_" + std::to_string(kernelCounter), fa->getBody());
+        kernelCounter++;
+      }
+      // Always recurse into body to find nested BFS or foralls
+      if (fa->getBody()) prescan(fa->getBody());
+      return;
     }
-  }
+    if (t == NODE_ITRBFS) {
+      // BFS WGSL kernels are emitted by generateBFS() during host code generation.
+      // Skip here to avoid double-emission with mismatched indices.
+      return;
+    }
+    // Recurse into block, fixedPoint, loop, loopStmt, while, dowhile, if bodies
+    if (t == NODE_BLOCKSTMT) {
+      blockStatement* b = static_cast<blockStatement*>(n);
+      for (statement* s : b->returnStatements()) prescan(s);
+    } else if (t == NODE_FIXEDPTSTMT) {
+      fixedPointStmt* fp = static_cast<fixedPointStmt*>(n);
+      if (fp->getBody()) prescan(fp->getBody());
+    } else if (t == NODE_LOOPSTMT) {
+      loopStmt* ls = static_cast<loopStmt*>(n);
+      if (ls->getBody()) prescan(ls->getBody());
+    } else if (t == NODE_WHILESTMT) {
+      whileStmt* ws = static_cast<whileStmt*>(n);
+      if (ws->getBody()) prescan(ws->getBody());
+    } else if (t == NODE_DOWHILESTMT) {
+      dowhileStmt* dw = static_cast<dowhileStmt*>(n);
+      if (dw->getBody()) prescan(dw->getBody());
+    } else if (t == NODE_IFSTMT) {
+      ifStmt* is = static_cast<ifStmt*>(n);
+      if (is->getIfBody()) prescan(is->getIfBody());
+      if (is->getElseBody()) prescan(is->getElseBody());
+    } else if (t == NODE_SIMPLEFORSTMT) {
+      simpleForStmt* sf = static_cast<simpleForStmt*>(n);
+      if (sf->getBody()) prescan(sf->getBody());
+    }
+  };
+  if (func->getBlockStatement()) prescan(func->getBlockStatement());
   
   // Now generate the JavaScript host function
   // Determine appropriate variable names based on function
@@ -265,6 +301,235 @@ void dsl_webgpu_generator::generateBlock(ASTNode* node, std::ofstream& out) {
     generateStatement(stmt, out);
   }
 }
+// ---------------------------------------------------------------------------
+// BFS kernel emission + host orchestration
+// ---------------------------------------------------------------------------
+// Emits TWO WGSL kernels for an iterateInBFS statement:
+//   kernel_<N>   — frontier expansion:  atomicCAS on dist[] to assign level,
+//                  sets result>0 if any node was newly reached (change signal)
+//   kernel_<N+1> — body execution:      for each node at current level,
+//                  executes the DSL body statements (neighbor work etc.)
+void dsl_webgpu_generator::emitBFSWGSLKernel(const std::string& baseName, iterateBFS* bfs) {
+  if (!bfs) return;
+  std::string iterVar = bfs->getIteratorNode() ? std::string(bfs->getIteratorNode()->getIdentifier()) : "v";
+
+  // --- kernel_<N>: frontier expansion ---
+  {
+    std::string filename = std::string("../graphcode/generated_webgpu/") + baseName + "_expand.wgsl";
+    std::ofstream wgslOut(filename);
+    if (!wgslOut.is_open()) return;
+
+    // Standard header: CSR b0-b3, params b4, result b5, then all propInfos at their own bindings.
+    // bfsDist is synthesized into propInfos by SymbolTableBuilder — no separate binding needed.
+    wgslOut << "// BFS frontier expansion kernel\n";
+    wgslOut << "@group(0) @binding(0) var<storage, read> adj_offsets: array<u32>;\n";
+    wgslOut << "@group(0) @binding(1) var<storage, read> adj_data: array<u32>;\n";
+    wgslOut << "@group(0) @binding(2) var<storage, read> rev_adj_offsets: array<u32>;\n";
+    wgslOut << "@group(0) @binding(3) var<storage, read> rev_adj_data: array<u32>;\n";
+    wgslOut << "struct Params { node_count: u32; current_level: u32; _pad1: u32; _pad2: u32; };\n";
+    wgslOut << "@group(0) @binding(4) var<uniform> params: Params;\n";
+    wgslOut << "@group(0) @binding(5) var<storage, read_write> result: atomic<u32>;\n";
+    // All properties (including synthesized bfsDist) at their propInfos binding indices
+    for (const auto &p : propInfos) {
+      wgslOut << "@group(0) @binding(" << p.bindingIndex << ") var<storage, read_write> "
+              << p.name << ": array<atomic<u32>>;\n";
+    }
+    wgslOut << "\n";
+
+    wgslOut << "@compute @workgroup_size(256)\n";
+    wgslOut << "fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {\n";
+    wgslOut << "  let " << iterVar << " = global_id.x;\n";
+    wgslOut << "  let node_count = params.node_count;\n";
+    wgslOut << "  let level = params.current_level;\n";
+    wgslOut << "  if (" << iterVar << " >= node_count) { return; }\n\n";
+    wgslOut << "  // Only process nodes at the current frontier level\n";
+    wgslOut << "  let my_dist = atomicLoad(&bfsDist[" << iterVar << "]);\n";
+    wgslOut << "  if (my_dist != level) { return; }\n\n";
+    wgslOut << "  // Expand: try to assign level+1 to each neighbor via CAS\n";
+    wgslOut << "  let next_level = level + 1u;\n";
+    wgslOut << "  for (var e = adj_offsets[" << iterVar << "]; e < adj_offsets[" << iterVar << " + 1u]; e = e + 1u) {\n";
+    wgslOut << "    let nbr = adj_data[e];\n";
+    wgslOut << "    let unvisited: u32 = 0xFFFFFFFFu;\n";
+    wgslOut << "    let cas = atomicCompareExchangeWeak(&bfsDist[nbr], unvisited, next_level);\n";
+    wgslOut << "    if (cas.exchanged) {\n";
+    wgslOut << "      // Signal that frontier grew\n";
+    wgslOut << "      atomicAdd(&result, 1u);\n";
+    wgslOut << "    }\n";
+    wgslOut << "  }\n";
+    wgslOut << "}\n";
+    wgslOut.close();
+  }
+
+  // --- kernel_<N+1>: body execution for newly-reached nodes ---
+  {
+    std::string filename = std::string("../graphcode/generated_webgpu/") + baseName + "_body.wgsl";
+    std::ofstream wgslOut(filename);
+    if (!wgslOut.is_open()) return;
+
+    wgslOut << "// BFS body execution kernel (runs body for nodes at current level)\n";
+    wgslOut << "@group(0) @binding(0) var<storage, read> adj_offsets: array<u32>;\n";
+    wgslOut << "@group(0) @binding(1) var<storage, read> adj_data: array<u32>;\n";
+    wgslOut << "@group(0) @binding(2) var<storage, read> rev_adj_offsets: array<u32>;\n";
+    wgslOut << "@group(0) @binding(3) var<storage, read> rev_adj_data: array<u32>;\n";
+    wgslOut << "struct Params { node_count: u32; current_level: u32; _pad1: u32; _pad2: u32; };\n";
+    wgslOut << "@group(0) @binding(4) var<uniform> params: Params;\n";
+    wgslOut << "@group(0) @binding(5) var<storage, read_write> result: atomic<u32>;\n";
+    // All properties (including synthesized bfsDist) at their propInfos binding indices
+    for (const auto &p : propInfos) {
+      wgslOut << "@group(0) @binding(" << p.bindingIndex << ") var<storage, read_write> "
+              << p.name << ": array<atomic<u32>>;\n";
+    }
+    wgslOut << "\n";
+
+    // Float CAS helpers (needed if body uses float properties)
+    wgslOut << "fn atomicAddF32(ptr: ptr<storage, atomic<u32>>, val: f32) -> f32 {\n";
+    wgslOut << "  loop { let ob: u32 = atomicLoad(ptr); let ov = bitcast<f32>(ob);\n";
+    wgslOut << "    let nb = bitcast<u32>(ov + val);\n";
+    wgslOut << "    let r = atomicCompareExchangeWeak(ptr, ob, nb);\n";
+    wgslOut << "    if (r.exchanged) { return ov; } }\n";
+    wgslOut << "}\n\n";
+
+    wgslOut << "@compute @workgroup_size(256)\n";
+    wgslOut << "fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {\n";
+    wgslOut << "  let " << iterVar << " = global_id.x;\n";
+    wgslOut << "  let node_count = params.node_count;\n";
+    wgslOut << "  let level = params.current_level;\n";
+    wgslOut << "  if (" << iterVar << " >= node_count) { return; }\n\n";
+    wgslOut << "  // Only process nodes at the current level\n";
+    wgslOut << "  let my_dist = atomicLoad(&bfsDist[" << iterVar << "]);\n";
+    wgslOut << "  if (my_dist != level) { return; }\n\n";
+
+    // Emit DSL body statements inside this kernel
+    if (bfs->getBody() && bfs->getBody()->getTypeofNode() == NODE_BLOCKSTMT) {
+      blockStatement* block = static_cast<blockStatement*>(bfs->getBody());
+      for (statement* stmt : block->returnStatements()) {
+        generateWGSLStatement(stmt, wgslOut, iterVar, 1);
+      }
+    } else if (bfs->getBody()) {
+      generateWGSLStatement(bfs->getBody(), wgslOut, iterVar, 1);
+    }
+
+    wgslOut << "}\n";
+    wgslOut.close();
+  }
+}
+
+// Host-side BFS orchestration: allocates bfsDist buffer, seeds root, iterates levels
+void dsl_webgpu_generator::generateBFS(iterateBFS* bfs, std::ofstream& out, int& launchIndex) {
+  if (!bfs) return;
+
+  std::string rootName = bfs->getRootNode() ? std::string(bfs->getRootNode()->getIdentifier()) : "src";
+  // Use bfsKernelCounter for kernel naming (independent of regular kernel launchIndex)
+  int bfsIdx = bfsKernelCounter;
+  std::string expandKernel = "bfs_kernel_" + std::to_string(bfsIdx) + "_expand";
+  std::string bodyKernel   = "bfs_kernel_" + std::to_string(bfsIdx) + "_body";
+
+  // Emit the two WGSL files
+  emitBFSWGSLKernel("bfs_kernel_" + std::to_string(bfsIdx), bfs);
+  bfsKernelCounter += 2; // consumed two BFS kernel slots (launchIndex unchanged)
+
+  // bfsDistBuffer is already allocated by buildPropertyRegistry (synthesized by SymbolTableBuilder).
+  // attachNodeProperty(..., bfsDist=-1) initialises it; src.bfsDist=0 seeds the root.
+  // We only need to build the bind-group entries for the two BFS kernels.
+  out << "\n  // === BFS from root: " << rootName << " ===\n";
+
+  // Build a shared bind-group builder used by both expand and body kernels
+  out << "  const bfsBuildEntries_" << bfsIdx << " = (paramsData) => {\n";
+  out << "    const buf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });\n";
+  out << "    device.queue.writeBuffer(buf, 0, new Uint32Array(paramsData));\n";
+  out << "    const entries = [\n";
+  out << "      { binding: 0, resource: { buffer: adj_offsetsBuffer } },\n";
+  out << "      { binding: 1, resource: { buffer: adj_dataBuffer } },\n";
+  out << "      { binding: 4, resource: { buffer: buf } },\n";
+  out << "      { binding: 5, resource: { buffer: resultBuffer } },\n";
+  out << "    ];\n";
+  out << "    if (rev_adj_offsetsBuffer) entries.push({ binding: 2, resource: { buffer: rev_adj_offsetsBuffer } });\n";
+  out << "    if (rev_adj_dataBuffer)   entries.push({ binding: 3, resource: { buffer: rev_adj_dataBuffer } });\n";
+  // All properties (including bfsDist) at their correct propInfos binding indices
+  for (const auto &p : propInfos) {
+    out << "    entries.push({ binding: " << p.bindingIndex
+        << ", resource: { buffer: " << p.name << "Buffer } });\n";
+  }
+  out << "    return { entries, paramsBuffer: buf };\n";
+  out << "  };\n\n";
+
+  // BFS level loop
+  out << "  let bfsLevel = 0;\n";
+  out << "  let bfsFrontierSize = 1; // start with root\n";
+  out << "  const bfsMaxLevels = nodeCount;\n\n";
+  out << "  while (bfsFrontierSize > 0 && bfsLevel < bfsMaxLevels) {\n";
+  out << "    // Reset result counter\n";
+  out << "    device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n\n";
+
+  // Build bind group layout entries: b0-b3 CSR, b4 params, b5 result, then all propInfos
+  // Helper lambda to emit the BGL entries string (same for expand and body)
+  auto emitBGL = [&](std::ofstream& o) {
+    o << "      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },\n";
+    o << "      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },\n";
+    o << "      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },\n";
+    o << "      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },\n";
+    o << "      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },\n";
+    o << "      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },\n";
+    for (const auto &p : propInfos) {
+      o << "      { binding: " << p.bindingIndex
+        << ", visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },\n";
+    }
+  };
+
+  std::string bfsBuild = "bfsBuildEntries_" + std::to_string(bfsIdx);
+
+  // ---- Expand kernel ----
+  out << "    // Frontier expansion\n";
+  out << "    const expandData = " << bfsBuild << "([nodeCount, bfsLevel, 0, 0]);\n";
+  out << "    const expandCode = await (await fetch('" << expandKernel << ".wgsl')).text();\n";
+  out << "    const expandMod = device.createShaderModule({ code: expandCode });\n";
+  out << "    const expandBGL = device.createBindGroupLayout({ entries: [\n";
+  emitBGL(out);
+  out << "    ]});\n";
+  out << "    const expandPL = device.createPipelineLayout({ bindGroupLayouts: [expandBGL] });\n";
+  out << "    const expandPipeline = device.createComputePipeline({ layout: expandPL, compute: { module: expandMod, entryPoint: 'main' } });\n";
+  out << "    const expandBG = device.createBindGroup({ layout: expandBGL, entries: expandData.entries });\n";
+  out << "    {\n";
+  out << "      const enc = device.createCommandEncoder();\n";
+  out << "      const pass = enc.beginComputePass();\n";
+  out << "      pass.setPipeline(expandPipeline); pass.setBindGroup(0, expandBG);\n";
+  out << "      const groups = Math.max(1, Math.ceil(nodeCount / 256));\n";
+  out << "      pass.dispatchWorkgroups(groups, 1, 1);\n";
+  out << "      pass.end();\n";
+  out << "      const readBuf = device.createBuffer({ size: 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });\n";
+  out << "      enc.copyBufferToBuffer(resultBuffer, 0, readBuf, 0, 4);\n";
+  out << "      device.queue.submit([enc.finish()]);\n";
+  out << "      await readBuf.mapAsync(GPUMapMode.READ);\n";
+  out << "      bfsFrontierSize = new Uint32Array(readBuf.getMappedRange())[0];\n";
+  out << "      readBuf.unmap();\n";
+  out << "    }\n\n";
+
+  // ---- Body kernel ----
+  out << "    // BFS body for current level\n";
+  out << "    const bodyData = " << bfsBuild << "([nodeCount, bfsLevel, 0, 0]);\n";
+  out << "    const bodyCode = await (await fetch('" << bodyKernel << ".wgsl')).text();\n";
+  out << "    const bodyMod = device.createShaderModule({ code: bodyCode });\n";
+  out << "    const bodyBGL = device.createBindGroupLayout({ entries: [\n";
+  emitBGL(out);
+  out << "    ]});\n";
+  out << "    const bodyPL = device.createPipelineLayout({ bindGroupLayouts: [bodyBGL] });\n";
+  out << "    const bodyPipeline = device.createComputePipeline({ layout: bodyPL, compute: { module: bodyMod, entryPoint: 'main' } });\n";
+  out << "    const bodyBG = device.createBindGroup({ layout: bodyBGL, entries: bodyData.entries });\n";
+  out << "    {\n";
+  out << "      const enc = device.createCommandEncoder();\n";
+  out << "      const pass = enc.beginComputePass();\n";
+  out << "      pass.setPipeline(bodyPipeline); pass.setBindGroup(0, bodyBG);\n";
+  out << "      const groups = Math.max(1, Math.ceil(nodeCount / 256));\n";
+  out << "      pass.dispatchWorkgroups(groups, 1, 1);\n";
+  out << "      pass.end();\n";
+  out << "      device.queue.submit([enc.finish()]);\n";
+  out << "      await device.queue.onSubmittedWorkDone();\n";
+  out << "    }\n\n";
+
+  out << "    bfsLevel++;\n";
+  out << "  } // end BFS\n\n";
+}
+
 void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, int& launchIndex) {
   if (!node) return;
   if (node->getTypeofNode() == NODE_BLOCKSTMT) {
@@ -276,12 +541,38 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
   }
 
   if (node->getTypeofNode() == NODE_FORALLSTMT) {
+    forallStmt* fa = static_cast<forallStmt*>(node);
+    // Check if the body of this forall contains a BFS statement (direct or nested one level).
+    // If so, treat this forall as a host-side loop over sources rather than a GPU kernel.
+    bool bodyHasBFS = false;
+    if (fa->getBody() && fa->getBody()->getTypeofNode() == NODE_BLOCKSTMT) {
+      blockStatement* fb = static_cast<blockStatement*>(fa->getBody());
+      for (statement* s : fb->returnStatements()) {
+        if (s->getTypeofNode() == NODE_ITRBFS) { bodyHasBFS = true; break; }
+      }
+    } else if (fa->getBody() && fa->getBody()->getTypeofNode() == NODE_ITRBFS) {
+      bodyHasBFS = true;
+    }
+
+    if (bodyHasBFS) {
+      // Emit a JS for-loop over the set (iterate sourceSet indices 0..nodeCount)
+      // and for each source run the BFS.  The iterator variable is used as the root.
+      std::string iterName = fa->getIterator() ? std::string(fa->getIterator()->getIdentifier()) : "src";
+      out << "  // ForAll-over-sources wrapping BFS: iterate host-side\n";
+      out << "  for (let " << iterName << " = 0; " << iterName << " < nodeCount; " << iterName << "++) {\n";
+      // Recurse into body
+      if (fa->getBody()) generateHostBody(fa->getBody(), out, launchIndex);
+      out << "  } // end forall-sources\n";
+      // NOTE: prescan no longer emits a kernel for BFS-wrapping foralls,
+      // so launchIndex is NOT incremented here.
+      return;
+    }
+
+    // Normal forall: dispatch as GPU kernel
     out << "  // Reset result before dispatch\n";
     out << "  device.queue.writeBuffer(resultBuffer, 0, new Uint32Array([0]));\n";
     out << "  const kernel_res_" << launchIndex << " = await launchkernel_" << launchIndex << "(device, adj_dataBuffer, adj_offsetsBuffer, paramsBuffer, resultBuffer, " << (propInfos.empty()? std::string("propertyBuffer") : std::string("propEntries")) << ", nodeCount, rev_adj_dataBuffer, rev_adj_offsetsBuffer);\n";
-    // Assign to generic result for now
     out << "  result = kernel_res_" << launchIndex << ";\n";
-    // If there is a scalar reduction target like 'triangle_count', keep it in sync
     Identifier* __rid = findFirstReductionTargetId(node);
     if (__rid && __rid->getIdentifier() != nullptr) {
       out << "  " << __rid->getIdentifier() << " = kernel_res_" << launchIndex << ";\n";
@@ -311,6 +602,12 @@ void dsl_webgpu_generator::generateHostBody(ASTNode* node, std::ofstream& out, i
     return;
   }
 
+  if (node->getTypeofNode() == NODE_ITRBFS) {
+    iterateBFS* bfs = static_cast<iterateBFS*>(node);
+    generateBFS(bfs, out, launchIndex);
+    return;
+  }
+
   if (node->getTypeofNode() == NODE_DOWHILESTMT) {
     dowhileStmt* dw = static_cast<dowhileStmt*>(node);
     out << "  // Do-while loop (WebGPU host)\n";
@@ -337,7 +634,13 @@ void dsl_webgpu_generator::generateStatement(ASTNode* node, std::ofstream& out) 
   switch (node->getTypeofNode()) {
     case NODE_DECL: {
       declaration* decl = static_cast<declaration*>(node);
+      Type* declType = decl->getType();
       Identifier* id = decl->getdeclId();
+      // propNode/propEdge declarations become GPU buffers (already allocated above) — skip
+      if (declType && (declType->isPropNodeType() || declType->isPropEdgeType())) {
+        out << "  // [skip] propNode/propEdge '" << (id ? id->getIdentifier() : "?") << "' is a GPU buffer\n";
+        break;
+      }
       out << "  let " << (id ? id->getIdentifier() : "unnamed");
       if (decl->isInitialized()) { out << " = "; generateExpr(decl->getExpressionAssigned(), out); }
       out << ";\n";
@@ -356,17 +659,33 @@ void dsl_webgpu_generator::generateStatement(ASTNode* node, std::ofstream& out) 
       } else if (asst->lhs_isProp()) {
         // Property assignment: object.property = expression
         PropAccess* prop = asst->getPropId();
-        out << "  ";
         if (prop && prop->getIdentifier2() && prop->getIdentifier1()) {
-          // Generate: property[object] = expression
-          out << prop->getIdentifier2()->getIdentifier() << "[" 
-              << prop->getIdentifier1()->getIdentifier() << "]";
+          std::string propName = prop->getIdentifier2()->getIdentifier();
+          std::string objName  = prop->getIdentifier1()->getIdentifier();
+          // Check if this property has a GPU buffer
+          bool isGPUProp = false;
+          std::string jsCtor = "Uint32Array";
+          for (const auto& p : propInfos) {
+            if (p.name == propName) {
+              isGPUProp = true;
+              jsCtor = (p.wgslType == "f32") ? "Float32Array"
+                     : (p.wgslType == "i32") ? "Int32Array" : "Uint32Array";
+              break;
+            }
+          }
+          if (isGPUProp) {
+            // Emit a writeBuffer to update the GPU buffer at the specified index
+            out << "  { const _val = new " << jsCtor << "([";
+            generateExpr(asst->getExpr(), out);
+            out << "]); device.queue.writeBuffer(" << propName << "Buffer, " << objName << " * 4, _val); }\n";
+          } else {
+            out << "  " << propName << "[" << objName << "] = ";
+            generateExpr(asst->getExpr(), out);
+            out << ";\n";
+          }
         } else {
-          out << "/*prop*/";
+          out << "  // Unhandled prop assignment\n";
         }
-        out << " = ";
-        generateExpr(asst->getExpr(), out);
-        out << ";\n";
         
       } else if (asst->lhs_isIndexAccess()) {
         // Index assignment: array[index] = expression
@@ -508,6 +827,13 @@ void dsl_webgpu_generator::generateStatement(ASTNode* node, std::ofstream& out) 
         else generateStatement(loop->getBody(), out);
       }
       out << "  }\n";
+      break;
+    }
+    case NODE_ITRBFS: {
+      iterateBFS* bfs = static_cast<iterateBFS*>(node);
+      // Use a local launchIndex for statement-level BFS (outside generateHostBody context)
+      int localIdx = kernelCounter;
+      generateBFS(bfs, out, localIdx);
       break;
     }
     case NODE_RETURN: {
@@ -2443,6 +2769,8 @@ void dsl_webgpu_generator::buildPropertyRegistry(Function* func) {
   propInfos.clear();
   if (!func) return;
   int nextBinding = 6; // Updated: bindings 0-1 forward CSR, 2-3 reverse CSR, 4 params, 5 result
+
+  // Phase 1: register function parameters that are properties
   for (formalParam* fp : func->getParamList()) {
     if (!fp) continue;
     Type* t = fp->getType();
@@ -2454,10 +2782,67 @@ void dsl_webgpu_generator::buildPropertyRegistry(Function* func) {
       pi.wgslType = mapTypeToWGSL(t->getInnerTargetType());
       pi.bindingIndex = nextBinding++;
       pi.isReadWrite = true;
-      pi.isEdgeProperty = t->isPropEdgeType(); // true for edge properties, false for node properties
+      pi.isEdgeProperty = t->isPropEdgeType();
       propInfos.push_back(pi);
     }
   }
+
+  // Phase 2: scan function body for local propNode/propEdge declarations (e.g. propNode<float> sigma;)
+  std::function<void(ASTNode*)> scanForProps = [&](ASTNode* n) {
+    if (!n) return;
+    int nt = n->getTypeofNode();
+    if (nt == NODE_DECL) {
+      declaration* d = static_cast<declaration*>(n);
+      Type* t = d->getType();
+      Identifier* id = d->getdeclId();
+      if (t && id && id->getIdentifier() && (t->isPropNodeType() || t->isPropEdgeType())) {
+        // Avoid duplicates
+        std::string name = id->getIdentifier();
+        bool found = false;
+        for (const auto& p : propInfos) { if (p.name == name) { found = true; break; } }
+        if (!found) {
+          PropInfo pi;
+          pi.name = name;
+          pi.wgslType = mapTypeToWGSL(t->getInnerTargetType());
+          pi.bindingIndex = nextBinding++;
+          pi.isReadWrite = true;
+          pi.isEdgeProperty = t->isPropEdgeType();
+          propInfos.push_back(pi);
+        }
+      }
+      return; // declarations have no children to recurse into
+    }
+    if (nt == NODE_BLOCKSTMT) {
+      blockStatement* b = static_cast<blockStatement*>(n);
+      for (statement* s : b->returnStatements()) scanForProps(s);
+    } else if (nt == NODE_FORALLSTMT) {
+      forallStmt* fa = static_cast<forallStmt*>(n);
+      if (fa->getBody()) scanForProps(fa->getBody());
+    } else if (nt == NODE_FIXEDPTSTMT) {
+      fixedPointStmt* fp = static_cast<fixedPointStmt*>(n);
+      if (fp->getBody()) scanForProps(fp->getBody());
+    } else if (nt == NODE_ITRBFS) {
+      iterateBFS* bfs = static_cast<iterateBFS*>(n);
+      if (bfs->getBody()) scanForProps(bfs->getBody());
+    } else if (nt == NODE_IFSTMT) {
+      ifStmt* s = static_cast<ifStmt*>(n);
+      if (s->getIfBody()) scanForProps(s->getIfBody());
+      if (s->getElseBody()) scanForProps(s->getElseBody());
+    } else if (nt == NODE_WHILESTMT) {
+      whileStmt* ws = static_cast<whileStmt*>(n);
+      if (ws->getBody()) scanForProps(ws->getBody());
+    } else if (nt == NODE_DOWHILESTMT) {
+      dowhileStmt* dw = static_cast<dowhileStmt*>(n);
+      if (dw->getBody()) scanForProps(dw->getBody());
+    } else if (nt == NODE_LOOPSTMT) {
+      loopStmt* ls = static_cast<loopStmt*>(n);
+      if (ls->getBody()) scanForProps(ls->getBody());
+    } else if (nt == NODE_SIMPLEFORSTMT) {
+      simpleForStmt* sf = static_cast<simpleForStmt*>(n);
+      if (sf->getBody()) scanForProps(sf->getBody());
+    }
+  };
+  if (func->getBlockStatement()) scanForProps(func->getBlockStatement());
 }
 
 std::string dsl_webgpu_generator::mapTypeToWGSL(Type* type) {
